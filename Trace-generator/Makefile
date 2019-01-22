@@ -22,4 +22,4 @@ trace_generator: $(OBJS)
 
 .PHONY: clean
 clean:
-	rm -f $(ODIR)/*.o
+	rm -f $(ODIR)/*.o trace_generator

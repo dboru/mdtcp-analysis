@@ -49,8 +49,13 @@ do
      
       #generate traffic for the desired load
       echo $dload
-      rm ../Trace-generator/trace_file/mdtcp-output.trace
-      ./../Trace-generator/trace_generator $dload $num_reqs $seed
+      cd ../Trace-generator
+      rm  trace_file/mdtcp-output.trace
+      
+      ./trace_generator $dload $num_reqs $seed
+
+      cd ../scripts
+
      
      # cp ../Trace-generator/trace_file/mdtcp-output.trace requests_load$dload
 
@@ -115,7 +120,7 @@ do
                   fi
                   
                   out_dir=results/$subdir/$WORKLOAD
-
+                  
                   cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
 
                   

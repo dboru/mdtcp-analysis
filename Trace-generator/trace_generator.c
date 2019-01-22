@@ -15,7 +15,7 @@ int    flow_total_time           = 0; /* total time to generate requests (in sec
 //int    load                      = 100; /* average network load in Mbps per host */
 int    incast                    = 0; /* all-to-one when set to 1 */
 struct cdf_table *flow_size_dist = NULL; /* flow distribution table*/
-char   flow_cdf_file[100]        = "./cdf/dctcp.cdf"; /* flow size distribution file */
+char   flow_cdf_file[100]        = "cdf/dctcp.cdf"; /* flow size distribution file */
 int    header_size               = 54;
 int    max_ether_size            = 1500;
 
@@ -78,7 +78,7 @@ double poission_gen_interval(double avg_rate)
 int main(int argc, char **argv) 
 {
 	FILE   *output_flow_file = NULL;
-	char   output_filename[100] = "./trace_file/mdtcp-output.trace";
+	char   output_filename[100] = "trace_file/mdtcp-output.trace";
 	int    flow_id = 0;
 	int    flow_size = 0;
 	double flow_start_time = 0.0; /* in second */
