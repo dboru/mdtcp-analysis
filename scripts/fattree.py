@@ -226,7 +226,7 @@ def getClntServMapping(yclnt):
 
 def readTrace():
     trace=[]
-    with open("../Trace-Generator/trace_file/mdtcp-output.trace") as fp:
+    with open("../Trace-generator/trace_file/mdtcp-output.trace") as fp:
         lines = fp.readlines()
         for line in lines:
             trace.append(line.split())

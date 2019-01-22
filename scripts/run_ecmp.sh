@@ -49,10 +49,10 @@ do
      
       #generate traffic for the desired load
       echo $dload
-      rm ../Trace-Generator/trace_file/mdtcp-output.trace
-      ./../Trace-Generator/trace_generator $dload $num_reqs $seed
+      rm ../Trace-generator/trace_file/mdtcp-output.trace
+      ./../Trace-generator/trace_generator $dload $num_reqs $seed
      
-     # cp ../Trace-Generator/trace_file/mdtcp-output.trace requests_load$dload
+     # cp ../Trace-generator/trace_file/mdtcp-output.trace requests_load$dload
 
       for pod in 4 ; 
       do 
@@ -116,7 +116,7 @@ do
                   
                   out_dir=results/$subdir/$WORKLOAD
 
-                  cp ../Trace-Generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
+                  cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
 
                   
                   sudo python -u fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
