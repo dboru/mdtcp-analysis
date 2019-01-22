@@ -1,0 +1,6 @@
+Place here the include and library files from the distribution of the dag software.
+If you correctly installed in your system the dag tools and libraries, this should
+not be required.
+Tstat is known to work with version dag-3.0.0.
+Files here come from the dag-3.0.0 distribution. They have been compiled under
+RedHat entrerprise 5.0.

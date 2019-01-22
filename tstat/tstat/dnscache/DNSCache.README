@@ -1,0 +1,11 @@
+In order to compile the DNSCache static library
+the follow steps must be followed:
+
+g++ -g -c DNSCache.cpp -o DNSCache.o
+g++ -g -c DNSEntry.cpp -o DNSEntry.o
+ar rcs libdnscache.a DNSCache.o DNSEntry.o
+
+To be used by tstat the modified version of 
+Makefile must be used. It contains particularly
+all the code, but at the end everything is linked
+(final target 'tstat') using g++ instead of gcc.

@@ -1,0 +1,141 @@
+
+#   ____________________________  
+#  /				\ 
+# /    now            __________/ 
+# \__________________/.:nonsns:.  
+# 				  
+
+
+Now, histograms are handled with structures such as:
+
+    struct double_histo_list
+    {
+      char name[HISTO_NAME_MAXLEN];
+      char descr[HISTO_DESCR_MAXLEN];
+
+    #ifdef HAVE_RRDTOOL
+    /*-----------------------------------------------------------*/
+    /* RRDtools                                                  */
+      struct rrdstat st;
+      struct rrdconf conf;
+    /*-----------------------------------------------------------*/
+    #endif
+      long min;
+      long max;
+      long bin_size;
+      
+      /* data[0] will count all samples smaller than min 
+       * data[i] will count all samples between min (i=1) 
+       *	 and max (i=num_col-1) with a step delta 
+       * data[num_col]   will count all samples larger than max 
+       * data[num_col+1] will count all samples 
+       */
+      
+      long *first_data;		// For threading support, one vector
+      long *second_data;	// is writeable and one is frozen.
+      long *current_data;	// This points either to 1st or 2nd vec.
+      
+      struct double_histo_list *next;
+    };
+
+
+they are created with calls such as:
+     var = create_histo("name", "description", min, max, step);
+
+
+     tcp_rtt_min_out =
+	create_histo ("tcp_rtt_min_out", "TCP flow minimum RTT [ms] - outgoing flows", 0,
+                      3500, 10);
+      tcp_rtt_min_in =
+	create_histo ("tcp_rtt_min_in", "TCP flow minimum RTT [ms]- incoming flows", 0,
+                      3500, 10);
+      tcp_rtt_min_loc =
+	create_histo ("tcp_rtt_min_loc", "TCP flow minimum RTT - local flows", 0,
+                      3500, 10);
+      tcp_rtt_min_c2s =
+	create_histo ("tcp_rtt_min_c2s", "TCP flow minimum RTT [ms] - client flows", 0,
+                      3500, 10);
+      tcp_rtt_min_s2c =
+	create_histo ("tcp_rtt_min_s2c", "TCP flow minimum RTT [ms] - server flows", 0,
+                      3500, 10);
+
+
+and the function call to add a sample is:
+        var = add_histo(var, val);
+  	
+	add_histo (tcp_rtt_min_out, (outgoing->rtt_min / 1000.0));
+  	add_histo (tcp_rtt_min_in,  (incoming->rtt_min / 1000.0));
+  	add_histo (tcp_rtt_min_loc, (outgoing->rtt_min / 1000.0));
+   	add_histo (tcp_rtt_min_loc, (incoming->rtt_min / 1000.0));
+   	add_histo (tcp_rtt_min_c2s, (ptp_save->c2s.rtt_min / 1000.0));
+   	add_histo (tcp_rtt_min_s2c, (ptp_save->s2c.rtt_min / 1000.0));
+
+
+
+#   ____________________________  
+#  /				\ 
+# /    then           __________/ 
+# \__________________/.:nonsns:.  
+# 				  
+
+however, it would be nice to gather all the TCP-layer statistics of 
+a flow, conditioning on the upper-layer protocol.
+E.g., one might say
+	1) which is the minimum rtt of the whole TCP aggregate ?
+	2) which is the minimum rtt of all the HTTP flows ?
+	3) which is the minimum rtt of all the Apple quicktime flows ?
+	4) which is the minimum rtt of all the MMS flows ?
+
+the computation of layer-4 indexes is done anyway at 1): thus, the
+same datum can be added to either 2), 3), 4) or nowhere depending on
+the higher layer protocol.
+
+
+then, one could do a structure that automatically handled 
+	1) the flow directionalities in a fixed way
+		c2s s2c		(user_direction)
+		in out loc	(network_direction)
+	2) the transport-layer and upper-layer parameters 
+	   in a dynamic way (by argument passing)
+
+something like
+	struct more_complex_histo {
+	     struct histo *c2s, *s2c;   
+	     struct histo *loc, *in, *out;   
+	     char *protocol_names[];
+	}     
+
+meaning that, semantically, I would create something that automatically
+prepend the protocol type  and append the flow direction to the variable
+name:
+
+        var = create_complex_histo("rtt_min", "description", min, max, step);
+
+	// protocol_id       0       1        2                3     
+	append_child(var, "tcp", "http", "apple_quicktime", "mms", NULL);
+
+	// the actual data allocation is done after this function call,
+	// since c2s, s2c are indeed vectors that have to be allocated
+	// for each registered protocol type, filling the protocol_names[] 
+	// variable.
+	//     create_histo(c2s[0], concat(protocol_name[0],  name,  "c2s");
+	//     create_histo(s2c[0], concat(protocol_name[0],  name,  "s2c");
+	//	...
+
+
+  	add_complex_histo (var, val, protocol_id, user_direction, network_direction);
+
+	
+so that protocol 0 would always be the transport-layer (TCP, UDP, ...),
+and would have to be updated anyway,  whereas the upper layer protcol would 
+have to be specified explicitly as the user_ and network_ directions
+
+  	add_complex_histo (var, val, protocol_id, user_direction, network_direction);
+	   switch (user_direction) {
+	   case c2s:
+	       add(histo, var->c2s[0], val)
+	       add(histo, var->c2s[protocol_id], val)
+		...
+
+
+

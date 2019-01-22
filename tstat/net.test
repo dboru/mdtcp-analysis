@@ -1,0 +1,4 @@
+# Example mask to consider as internal all the subnets in the 
+# 198.168. private addresses range
+10.0.0.0/24
+
