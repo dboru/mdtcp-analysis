@@ -235,7 +235,7 @@ def readTrace():
 
 def start_tcpdump(output_dir):
     Popen("tcpdump -i any -s 96 net 10.0.0.0/16 or net 10.1.0.0/16 or \
-        net 10.2.0.0/16 or net 10.3.0.0/16 -C 100 -w %s/trace-%s.dmp \
+        net 10.2.0.0/16 or net 10.3.0.0/16 -G 30 -w %s/trace-%s.dmp \
         -z gzip &"%(output_dir,datetime.datetime.now().strftime("%y%m%d-%H:%M:%S")), shell=True)
     
 
@@ -350,7 +350,7 @@ class Workload():
         last_time=0 
         for conn in trace:
             count=count+1
-            if count > (len(trace)-1) or last_time > 10.0:
+            if count > (len(trace)-1) or last_time > 300.0:
                 stop_tcpprobe()
                 break
             if count==1 and args.iter==1 and args.bwm_ng:

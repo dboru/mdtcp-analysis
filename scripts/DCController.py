@@ -8,7 +8,7 @@
 import logging
 
 import sys
-sys.path.append('/home/doljira/workspace/mdtcp-cong/mdtcp-cong/scripts')
+# sys.path.append('/home/doljira/workspace/mdtcp-cong/mdtcp-cong/scripts')
 
 from struct import pack
 from zlib import crc32
@@ -23,6 +23,8 @@ from pox.lib.packet.ipv4 import ipv4
 from pox.lib.packet.udp import udp
 from pox.lib.packet.tcp import tcp
 from util import buildTopo,getRouting
+
+
 #from util import getRouting
 
 
@@ -113,7 +115,6 @@ class DCController(EventMixin):
             for host_name in t.lower_nodes(sw_name):
                 sw_port, host_port = t.port(sw_name, host_name)
                 sw = t.node_gen(name = sw_name).dpid
-
                 # Send packet out each non-input host port
                 if sw != dpid or (sw == dpid and in_port != sw_port):
                     self.switches[sw].send_packet_data(sw_port, event.data)
@@ -125,9 +126,7 @@ class DCController(EventMixin):
         out_name = self.t.node_gen(dpid = out_dpid).name_str()
         hash_ = self._ecmp_hash(packet)
         route = self.r.get_route(in_name, out_name, hash_) 
-        if route is None:
-            self._flood(event)
-            # print('No route') 
+        if route is None: 
             return
 
         match = of.ofp_match.from_packet(packet)

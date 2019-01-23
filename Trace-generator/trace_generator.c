@@ -135,7 +135,7 @@ int main(int argc, char **argv)
         	/* Assign flow size and start time */
 	       flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
              
-               flow_size = gen_random_cdf(flow_size_dist);
+           flow_size = gen_random_cdf(flow_size_dist);
 	      	
              
 		/* Incast: only accept dst_host = 0 */

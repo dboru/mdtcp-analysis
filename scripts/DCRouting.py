@@ -110,7 +110,6 @@ class HashedRouting(Routing):
         
         if src == dst:
             return [src]
-    
         paths = self.routes(src,dst)
         if paths:
             choice = hash_ % len(paths)

@@ -3,7 +3,7 @@ mn -c
 
 cdate=$(date +"%Y%m%d")
 
-DURATION=60
+DURATION=20
 iperf="iperf"
 mdtcp_debug=0
 queue_size=400
@@ -12,7 +12,7 @@ queue_size=400
 qmon=1
 bwm=1
 tcpdump=1
-tcpprobe=1
+tcpprobe=0
 
 
 num_reqs=10000
@@ -30,31 +30,33 @@ sleep 2
 # proto 0=mptcp, proto=1=mdtcp
 m=1
 bw=10
-delay=1
+delay=0.1
 
 seed=754
 
 while [ $m -le 1 ] ; 
 do
-  seed=$(( seed + m)) 
-  for mytest in 1 ;
+  seed=$(( seed + m )) 
+  for mytest in 0 ;
   do 
-    for WORKLOAD in 'one_to_several';
+    for WORKLOAD in 'one_to_one';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 0.1  ; 
+    for load in 1.0  ; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
      
       #generate traffic for the desired load
-      echo $dload
-      cd ../Trace-generator
-      rm  trace_file/mdtcp-output.trace
-      
-      ./trace_generator $dload $num_reqs $seed
 
-      cd ../scripts
+      if [ $mytest -eq 1 ]; 
+      then 
+        echo $dload
+        cd ../Trace-generator
+        rm  trace_file/mdtcp-output.trace
+        ./trace_generator $dload $num_reqs $seed
+        cd ../scripts
+      fi
 
      
      # cp ../Trace-generator/trace_file/mdtcp-output.trace requests_load$dload
@@ -63,11 +65,11 @@ do
       do 
         for proto in 1 0 ;
         do 
-          for subflows in 1 4; 
+          for subflows in 1; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
-            if [ $tcpprobe -eq 1] ;
+            if [ $tcpprobe -eq 1 ] ;
             then 
               modprobe tcp_probe
             fi
@@ -81,7 +83,7 @@ do
             # cdate=$(date +"%Y%m%d")
             if [ $proto -eq 1 ] ;
             then 
-              redmax=35000
+              redmax=30001
               redmin=30000
               redburst=31
             	redprob=1
@@ -120,17 +122,21 @@ do
                   fi
                   
                   out_dir=results/$subdir/$WORKLOAD
-                  
-                  cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
 
+                  if [ $mytest -eq 1 ];
+                  then 
+                    cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
+                  fi
                   
-                  sudo python -u fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
+                  python fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
                   --workload $WORKLOAD --K $pod --bw $bw --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\
                   --redmin $redmin --burst  $redburst --queue  $queue_size --prob $redprob --enable_ecn $enable_ecn\
                   --enable_red $enable_red --subflows $subflows --mdtcp_debug $mdtcp_debug --num_reqs $num_reqs\
                   --test $mytest --qmon $qmon --iter $m   --load $load --bwm  $bwm --tcpdump $tcpdump --tcpprobe $tcpprobe
 
                   sudo mn -c
+
+
                   if [ $mytest -eq 1 ]
                   then 
                     python process_fct.py  -s $subflows -f results/$subdir/$WORKLOAD/*/flows_10* -o plots/$subdir-$WORKLOAD.png
@@ -165,8 +171,9 @@ do
             done # topology
 
             sleep 1
-            sudo chown $USER -R results
-            sudo chown $USER -R plots
+            # a=$USER
+            sudo chown doljira -R results
+            sudo chown doljira -R plots
 
       done #load for FCT test
     done #workload
