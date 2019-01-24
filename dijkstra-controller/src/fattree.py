@@ -358,7 +358,7 @@ class Workload():
         prev_time=0.0 
         for conn in trace:
             count=count+1
-            if count > (len(trace)-1) or last_time > 100.0:
+            if count > (len(trace)-1):
                 stop_tcpprobe()
                 break
             client=None
