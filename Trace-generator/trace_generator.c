@@ -86,6 +86,13 @@ int main(int argc, char **argv)
 	double period_us;
 	double load=100.0;/*load */
     int seed=754;
+    float elephant_time[16];
+    int elephant_flow[16];
+    int i=0;
+    for (i=0;i<16;i++){
+    	elephant_time[i]=0.0;
+    	elephant_flow[i]=0;
+    }
 
 
 	if (argc > 3) {
@@ -136,8 +143,13 @@ int main(int argc, char **argv)
 	       flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
              
            flow_size = gen_random_cdf(flow_size_dist);
-	      	
-             
+
+           if (flow_size > 1000000 && elephant_time[dst_host] > 0 && (flow_start_time-elephant_time[dst_host]<0.05))
+           	    continue;
+           	else if (flow_size > 1000000)
+           		elephant_time[dst_host]=flow_start_time;
+
+       
 		/* Incast: only accept dst_host = 0 */
 		if (incast && dst_host != 0) {
 			flow_id--;
