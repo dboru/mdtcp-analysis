@@ -304,7 +304,7 @@ class Workload():
                 client.cmd('ping '+ server.IP()+ ' -i 1  > '+output_dir+'/ping-'+client.IP()+\
                    '-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
 
-            if args.bwm_ng:
+            if args.bwm_ng and args.iter==1:
                 start_bwmng(output_dir)
             sleep(args.time)
             os.system('killall -9 bwm-ng ss ping tcpdump')
@@ -356,6 +356,7 @@ class Workload():
         cur_time=time.time()
         last_time=0
         prev_time=0.0 
+        bwmng=0
         for conn in trace:
             count=count+1
             if count > (len(trace)-1):
@@ -387,8 +388,9 @@ class Workload():
             
             sleep(interval)
 
-            if count > len(self.net.hosts)/2:
+            if count > len(self.net.hosts)/2 and bwmng==0 :
                 start_bwmng(output_dir)
+                bwmng=1
 
         # print(time.time()-cur_time,last_time)
         
