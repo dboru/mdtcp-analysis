@@ -240,11 +240,14 @@ def readTrace():
     return trace
             
 
-def start_tcpdump(output_dir):
-    Popen("tcpdump -i any -s 96 net 10.0.0.0/16 or net 10.1.0.0/16 or \
-        net 10.2.0.0/16 or net 10.3.0.0/16 -G 30 -w %s/trace-%s.dmp \
-        -z gzip &"%(output_dir,datetime.datetime.now().strftime("%y%m%d-%H:%M:%S")), shell=True)
+def start_tcpdump(output_dir,iface):
+    Popen("tcpdump -i %s -s 96 net 10.0.0.0/16 or net 10.1.0.0/16 or \
+        net 10.2.0.0/16 or net 10.3.0.0/16 -C 100 -w %s/trace-%s-%s.dmp \
+        -z gzip &"%(iface,output_dir,iface,datetime.datetime.now().strftime("%y%m%d-%H:%M:%S")), shell=True)
     
+def start_bwmng(output_dir):
+    if args.iter==1 and args.bwm_ng:
+        Popen('bwm-ng -t 100 -T rate -c 0  -o csv -C , -F %s/rates_iter.txt &'%(output_dir), shell=True)
 
 class Workload():
     def __init__(self, net, iperf, seconds):
@@ -273,28 +276,23 @@ class Workload():
             switch_names = [switch.name for switch in self.net.switches]
             for iface in interfaces:
                 
-                if iface.split('-')[0] in switch_names:
-                                       
+                if iface.split('-')[0] in switch_names:             
                     sw=self.layer(iface.split('-')[0])
-                    # if sw =='edge' and ('eth1' in iface or 'eth2' in iface):
-                    #     # Popen("tstat -l -N net.conf -i %s -s %s/trace-iface-%s"%(iface,output_dir,iface), shell=True)
-                    #     Popen("tcpdump -i %s -s 96 -c 100000 -w %s/trace-iface-%s.pcap"%(iface,output_dir,iface), shell=True)
+                    if  args.tcpdump and args.iter==1 and sw =='edge' and ('eth1' in iface or 'eth2' in iface):
+                        start_tcpdump(output_dir,iface)
+                        # Popen("tstat -l -N net.conf -i %s -s %s/trace-iface-%s"%(iface,output_dir,iface), shell=True)    
                     qmons.append(start_qmon(iface,outfile="%s/queue_size_%s-%s_iter%s.txt"
                                             % (output_dir, sw,iface,str(args.iter))))
 
      
         if args.test==1:
-            if args.tcpdump and args.iter==1:
-                start_tcpdump(output_dir)
+            
             if args.tcpprobe and args.iter==1:
                 start_tcpprobe(output_dir,"cwnd.txt")
-
+                
             self.generate_request(output_dir,subflows)
                 
         if args.test==0:
-            #start_tcpprobe(output_dir,"cwnd.txt")
-            if args.tcpdump and args.iter==1:
-                start_tcpdump(output_dir)
             if args.tcpprobe and args.iter==1:
                 start_tcpprobe(output_dir,"cwnd.txt")
 
@@ -307,7 +305,7 @@ class Workload():
                    '-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
 
             if args.bwm_ng:
-                Popen('bwm-ng -t 100 -T rate -c 0  -o csv -C , -F %s/rates_iter%d.txt &'%(output_dir,args.iter), shell=True)
+                start_bwmng(output_dir)
             sleep(args.time)
             os.system('killall -9 bwm-ng ss ping tcpdump')
 
@@ -350,19 +348,19 @@ class Workload():
             #sserver.cmd('while sleep 1; do ss -i -t -4 ; done > %s/server-'+sserver.IP()+' &' % output_dir)
             sserver.cmd( "./../hk-traffic-generator/bin/server -p %s  >> /dev/null & " % servport)
         
+        
         sleep(5)
 
         trace=readTrace()
         count=0
         cur_time=time.time()
-        last_time=0 
+        last_time=0
+        prev_time=0.0 
         for conn in trace:
             count=count+1
-            if count > (len(trace)-1) or last_time > 60.0:
+            if count > (len(trace)-1) or last_time > 100.0:
                 stop_tcpprobe()
                 break
-            if count==1 and args.iter==1 and args.bwm_ng:
-                Popen('bwm-ng -t 100 -T rate -c 0  -o csv -C , -F %s/rates_iter.txt &'%(output_dir), shell=True)         
             client=None
             server=None
             for h in hosts:
@@ -374,35 +372,39 @@ class Workload():
                    break
             flowsize=int(conn[5])
             start_time=float(conn[6])
+            interval=start_time-prev_time
+
             next_request=trace[count]
             next_time=float(next_request[6])
             last_time=next_time
 
-            # print(start_time,(next_time-start_time))
-            # ev=Timer(start_time, self.send_request,(client,server,5001,flowsize,output_dir)).start()
-            # events.append(ev)
+            # print(start_time,interval)
+            # Timer(interval, self.send_request,(client,server,5001,flowsize,output_dir)).start()
+            prev_time=start_time
+
             client.cmd("./../hk-traffic-generator/bin/simple-client -s  %s  -p %d  -n %d \
                 -c 1 >> %s/flows_10 &" % (server.IP(), 5001, flowsize, output_dir))
-            # client.cmd('while sleep 1; do ss -i -t -4 ; done > ss_clnt_'+client.IP()+\
-            # '_to_'+server.IP()+'_conn_'+str(count)+'&')
-            # #print (conn, next_request, (next_time-start_time))
-            if next_time>start_time:
-               sleep(next_time-start_time)
+            
+            sleep(interval)
+
+            if count > len(self.net.hosts)/2:
+                start_bwmng(output_dir)
 
         # print(time.time()-cur_time,last_time)
         
-        sleep(30)
+        sleep(last_time+60)
+        os.system('killall -9 tcpdump tstat ss bwm-ng')
        
-        while True:
-            clnt=os.popen("ps ax | grep 'simple-client' | wc -l").read()
-            nclnt=clnt.split('\n')
-            if  len(nclnt) == 2 and int(nclnt[0]) < 4:
-                # Popen(' mergecap -a -F pcap -w %s/trace.pcap *.pcap'%output_dir,shell=True)
-                # Popen('rm %s/trace-10.*'%output_dir,shell=True)
-                os.system('killall -9 tcpdump tstat ss bwm-ng')
-                break
-            else:
-                sleep(1)
+        # while True:
+        #     clnt=os.popen("ps ax | grep 'simple-client' | wc -l").read()
+        #     nclnt=clnt.split('\n')
+        #     if  len(nclnt) == 2 and int(nclnt[0]) < 4:
+        #         # Popen(' mergecap -a -F pcap -w %s/trace.pcap *.pcap'%output_dir,shell=True)
+        #         # Popen('rm %s/trace-10.*'%output_dir,shell=True)
+        #         os.system('killall -9 tcpdump tstat ss bwm-ng')
+        #         break
+        #     else:
+        #         sleep(1)
             
     def emptraffic_generator(self, output_dir):
         # timeDelay=5.0 

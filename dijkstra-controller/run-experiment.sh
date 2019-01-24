@@ -11,7 +11,7 @@ queue_size=400
 # test=0 throughput test, test=1 FCT
 qmon=1
 bwm=1
-tcpdump=0
+tcpdump=1
 tcpprobe=0
 
 num_reqs=1000
@@ -20,16 +20,21 @@ echo $cdir
 export PYTHONPATH=${PYTHONPATH}:$cdir/src
 mkdir -p plots
 
-python src/pox/pox.py DCController --topo=ft,4 --routing=ECMP &
-controllerId=$!
-echo $controllerId
+ctrl=$( ps ax | grep DCController | wc -l )
+
+if [ $ctrl -le 1 ] ;
+then 
+  python src/pox/pox.py DCController --topo=ft,4 --routing=ECMP &
+  controllerId=$!
+  echo $controllerId
+fi
 
 sleep 1
 
 # proto 0=mptcp, proto=1=mdtcp
 m=1
 bw=10
-delay=1
+delay=0.1
 
 seed=754
 
@@ -37,12 +42,12 @@ while [ $m -le 1 ] ;
 do
   seed=$(( seed + m )) 
 
-  for mytest in 0 ;
+  for mytest in 1 ;
   do 
-    for WORKLOAD in 'one_to_one';
+    for WORKLOAD in 'one_to_several';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 0.1  ; 
+    for load in 0.1 0.4 ; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
@@ -129,7 +134,7 @@ do
                     cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
                   fi
                   
-                  echo 'We are here'
+                  
 
                   python src/fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
                   --workload $WORKLOAD --K $pod --bw $bw --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\

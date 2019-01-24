@@ -15,8 +15,9 @@ def monitor_qlen(iface, interval_sec = 0.001, fname='%s/qlen.txt' % default_dir)
         output = p.stdout.read()
         # Not quite right, but will do for now
         matches = pat_queued.findall(output)
+
         # and int(matches[1]) > 10
-        if matches and len(matches) > 1 int(matches[1]) >= 10:
+        if matches and len(matches) > 1 :
 
             ret.append(matches[1])
             t = "%f" % time()

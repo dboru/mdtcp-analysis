@@ -88,9 +88,16 @@ int main(int argc, char **argv)
 
 	int seed=754;
 	float elephant_time[16];
+	int  flows[16];
+
+	double flows_time[16];
+	
 	int i=0;
+
 	for (i=0;i<16;i++){
 		elephant_time[i]=0.0;
+		flows[i]=0;
+		flows_time[i]=0.0;
 	}
 
 	if (argc > 3) {
@@ -100,8 +107,6 @@ int main(int argc, char **argv)
 	} else if (argc < 2  && argc > 1)
 	{
 		load=atof(argv[1]);
-
-
 	}
 
 	flow_size_dist = (struct cdf_table*)malloc(sizeof(struct cdf_table));
@@ -137,17 +142,33 @@ int main(int argc, char **argv)
 			dst_host = rand() % host_num;
 
 
-
 		/* Assign flow size and start time */
 		flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
 
 		flow_size = gen_random_cdf(flow_size_dist);
+
+		/*schedule one elephant flow per 50ms for a server (median value of large flows=1 from DCTCP paper)*/
 
 		if (flow_size > 1000000 && elephant_time[dst_host] > 0 && (flow_start_time-elephant_time[dst_host]<0.05))
 			continue;
 		else if (flow_size > 1000000)
 			elephant_time[dst_host]=flow_start_time;
 
+		int num_pkts=(flows[dst_host]+flow_size)/max_ether_size;
+
+		
+
+		/*don't overload the server*/ 
+        
+        if (flows_time[dst_host]> 0.0 && (flow_start_time-flows_time[dst_host])>0)
+        {
+        	if ((8*(flows[dst_host]+flow_size+num_pkts*header_size)/(1000000*(flow_start_time-flows_time[dst_host]))) > load)
+        		continue;
+        	else
+        		flows[dst_host]+=flow_size;
+        } 
+        else if(flows_time[dst_host] == 0.0)
+        	flows_time[dst_host]=flow_start_time;
 
 
 		/* Incast: only accept dst_host = 0 */

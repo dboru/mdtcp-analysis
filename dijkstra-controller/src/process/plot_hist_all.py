@@ -117,8 +117,6 @@ for i in sorted(throughput.keys()):
 
   #fmdtcp.write(str(i)+','+str(avg)+','+str(avg_lci)+','+str(avg_hci)+'\n')
 
-
-  
   tcp_points = sorted(vals)
   xaxis = range(len(tcp_points)) 
   slabel="MDTCP, "+str(i)+" subflows"
