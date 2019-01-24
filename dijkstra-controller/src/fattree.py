@@ -392,7 +392,7 @@ class Workload():
 
         # print(time.time()-cur_time,last_time)
         
-        sleep(last_time+60)
+        sleep(60)
         os.system('killall -9 tcpdump tstat ss bwm-ng')
        
         # while True:
