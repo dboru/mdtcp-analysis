@@ -1,6 +1,6 @@
 /*
    The code generates the output_flow_file based on flow_cdf_file
-   */
+ */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -85,17 +85,22 @@ int main(int argc, char **argv)
 	int    max_payload_size = max_ether_size - header_size;
 	double period_us;
 	double load=100.0;/*load */
-    int seed=754;
+	int seed=754;
+	float elephant_time[16];
+	int i=0;
+	for (i=0;i<16;i++){
+		elephant_time[i]=0.0;
 
+	}
 
 	if (argc > 3) {
 		load=atof(argv[1]);
 		flow_total_num=atoi(argv[2]);
-        seed=atoi(argv[3]);
+		seed=atoi(argv[3]);
 	} else if (argc < 2  && argc > 1)
 	{
 		load=atof(argv[1]);
-                
+
 
 	}
 
@@ -105,15 +110,15 @@ int main(int argc, char **argv)
 
 	/* Average request arrival interval (in microsecond) */
 	period_us = ((avg_cdf(flow_size_dist)*8.0/max_payload_size)*max_ether_size)/(host_num*load); 
-	 /*
+	/*
 	   printf("host_num        %d \n", host_num);
 	   printf("flow_total_num  %d \n", flow_total_num);
 	   printf("flow_total_time %d \n", flow_total_time);
 	   printf("load            %d \n", load);
 	   printf("avg_flowsize    %f \n", avg_cdf(flow_size_dist));
 	   printf("period_us       %f \n", period_us);
-          */	   
-          //printf("period_us       %f \n", period_us);
+	 */	   
+	//printf("period_us       %f \n", period_us);
 	/* Convert flow_total_time to flow_total_num */
 	if (flow_total_num == 0 && flow_total_time > 0)
 		flow_total_num = flow_total_time * 1000000 / period_us;
@@ -123,7 +128,7 @@ int main(int argc, char **argv)
 
 	/* Generate traffic flows */
 	for (flow_id=0; flow_id<flow_total_num; flow_id++) {
-	
+
 		int src_host = rand() % host_num;
 		int dst_host = rand() % host_num;
 
@@ -132,12 +137,16 @@ int main(int argc, char **argv)
 			dst_host = rand() % host_num;
 
 
-        	/* Assign flow size and start time */
-	       flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
-             
-           flow_size = gen_random_cdf(flow_size_dist);
-	      	
-             
+		/* Assign flow size and start time */
+		flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
+
+		flow_size = gen_random_cdf(flow_size_dist);
+		if (flow_size > 1000000 && elephant_time[dst_host] > 0 && (flow_start_time-elephant_time[dst_host]<0.05))
+			continue;
+		else if (flow_size > 1000000)
+			elephant_time[dst_host]=flow_start_time;
+
+
 		/* Incast: only accept dst_host = 0 */
 		if (incast && dst_host != 0) {
 			flow_id--;
@@ -155,8 +164,8 @@ int main(int argc, char **argv)
 				flow_size,
 				flow_start_time);
 		fclose(output_flow_file);
-	
-  }
+
+	}
 
 	return 0;
 }
