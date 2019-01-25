@@ -293,8 +293,10 @@ class Workload():
             
             if args.tcpprobe and args.iter==1:
                 start_tcpprobe(output_dir,"cwnd.txt")
-                
-            self.generate_request(output_dir,subflows)
+
+            self.ditg_flow_gen(output_dir)
+
+            # self.generate_request(output_dir,subflows)
                 
         if args.test==0:
             if args.tcpprobe and args.iter==1:
@@ -339,6 +341,51 @@ class Workload():
                 return 'agg'
         else:
             return 'host'
+    
+
+    def ditg_flow_gen(self,output_dir):
+        for server in self.net.hosts:
+            server.cmd("ITGRecv >> /dev/null &")
+        sleep(5)
+        trace=readTrace()
+
+        # rate=(args.load*args.bw)/(8*1500*1e-6)
+        rate=(args.bw)/(8*1024*1e-6)
+        print(rate)
+
+        count=0
+        cur_time=time.time()
+        last_time=0
+        prev_time=0.0 
+        bwmng=0
+
+        for clnt in self.net.hosts:
+            with open('clnt_%s'%clnt.IP(),'w') as file:
+                # os.system('cat > clnt_%s<<END\n'%clnt.IP())
+                for conn in trace:
+                    if clnt.IP()==conn[1]:
+                        server=None
+                        for serv in self.net.hosts:
+                            if serv.IP()==conn[2]:
+                                server=serv
+                                break;
+                        delayms=1000*float(conn[6])
+                        last_time=float(conn[6])
+                        fs=int(conn[5])
+                        if fs > 1024:
+                            fs=fs/1024
+                        else:
+                            fs=1
+                        file.write('-a %s -C %d -c 1024 -T TCP -k %d -t 10000 -d %f -rp 5001\n'%\
+                            (server.IP(),rate,fs,delayms))
+                file.close()
+
+        for client in self.net.hosts:
+            client.cmd("ITGSend clnt_%s -l %s/sender_%s & "%(client.IP(),output_dir,client.IP()))
+        print(last_time)
+        sleep(last_time+120)
+
+    
     def send_request(self,client, server,servport,flowsize,output_dir):
         client.popen("./../hk-traffic-generator/bin/simple-client -s  %s  -p %d  -n %d -c 1 >> %s/flows_10 &" % \
           (server.IP(), servport, flowsize, output_dir),shell=True)
@@ -402,7 +449,7 @@ class Workload():
         os.system('killall -9 tcpdump tstat ss bwm-ng')
        
         # while True:
-        #     clnt=os.popen("ps ax | grep 'simple-client' | wc -l").read()
+        #     clnt=os.popen("ps ax | grep 'ps ax | grep ITGSend' | wc -l").read()
         #     nclnt=clnt.split('\n')
         #     if  len(nclnt) == 2 and int(nclnt[0]) < 4:
         #         # Popen(' mergecap -a -F pcap -w %s/trace.pcap *.pcap'%output_dir,shell=True)
