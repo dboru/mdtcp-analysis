@@ -88,16 +88,16 @@ int main(int argc, char **argv)
 
 	int seed=754;
 	float elephant_time[16];
-	int  flows[16];
+	// int  flows[16];
 
-	double flows_time[16];
-	
+	// double flows_time[16];
+
 	int i=0;
 
 	for (i=0;i<16;i++){
 		elephant_time[i]=0.0;
-		flows[i]=0;
-		flows_time[i]=0.0;
+		// flows[i]=0;
+		// flows_time[i]=0.0;
 	}
 
 	if (argc > 3) {
@@ -114,7 +114,14 @@ int main(int argc, char **argv)
 	load_cdf(flow_size_dist, flow_cdf_file);
 
 	/* Average request arrival interval (in microsecond) */
-	period_us = ((avg_cdf(flow_size_dist)*8.0/max_payload_size)*max_ether_size)/(host_num*load); 
+	//period_us = ((avg_cdf(flow_size_dist)*8.0/max_payload_size)*max_ether_size)/(host_num*load); 
+
+	period_us = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(host_num*load*max_payload_size); 
+	//per server period
+	float period_sec = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(load*max_payload_size*1000000.0); 
+
+
+
 	/*
 	   printf("host_num        %d \n", host_num);
 	   printf("flow_total_num  %d \n", flow_total_num);
@@ -154,21 +161,17 @@ int main(int argc, char **argv)
 		else if (flow_size > 1000000)
 			elephant_time[dst_host]=flow_start_time;
 
-		int num_pkts=(flows[dst_host]+flow_size)/max_ether_size;
+		//int num_pkts=(flows[dst_host]+flow_size)/max_ether_size;
 
-		
+
 
 		/*don't overload the server*/ 
-        
-        if (flows_time[dst_host]> 0.0 && (flow_start_time-flows_time[dst_host])>0)
-        {
-        	if ((8*(flows[dst_host]+flow_size+num_pkts*header_size)/(1000000*(flow_start_time-flows_time[dst_host]))) > load)
-        		continue;
-        	else
-        		flows[dst_host]+=flow_size;
-        } 
-        else if(flows_time[dst_host] == 0.0)
-        	flows_time[dst_host]=flow_start_time;
+		//float period_sec=period_us/1000000.0;
+
+		// if ( (flow_start_time-flows_time[dst_host])<period_sec)
+		// 	continue;
+
+		// flows_time[dst_host]=flow_start_time;
 
 
 		/* Incast: only accept dst_host = 0 */
@@ -187,6 +190,16 @@ int main(int argc, char **argv)
 				get_host_next_port(dst_host),
 				flow_size,
 				flow_start_time);
+                if (flow_id==flow_total_num-1)
+                   fprintf(output_flow_file, "%d %s %s %d %d %d %.9f\n",
+				flow_id,
+				host_ip[src_host],
+				host_ip[dst_host],
+				get_host_next_port(src_host),
+				get_host_next_port(dst_host),
+				flow_size,
+				period_sec);
+   
 		fclose(output_flow_file);
 
 	}
