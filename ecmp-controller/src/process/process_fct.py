@@ -26,18 +26,22 @@ def parse_file(file_name,results,subflow):
     size_transfer=0
     while True:
         line = f.readline().rstrip()
+        # print(line,f)
 
         if not line:
             break
         arr = line.split(',')
+
+        # 20190126174247.123,10.0.0.3,45608,10.3.0.3,5001,3,0.0-0.2,122277,4194031 (iperf2.0.12)
         # Size:34075, Duration(usec):9098403
         
         '''Size:flowsize, Duration(usec):fct'''
-        if len(arr) >= 2:
+        if len(arr) == 9:
             '''[size, fct]'''
 
-            size=int(arr[0].split(':')[1])
-            fct_ms=float(arr[1].split(':')[1])/1000.0;
+            size=int(arr[7])
+            # in ms 
+            fct_ms=float(arr[6].split('-')[1])*1000.0;
             if  size < 100*1024:
                 results[subflow]['small']['size'].append(size)
                 results[subflow]['small']['fct'].append(fct_ms)
@@ -48,9 +52,20 @@ def parse_file(file_name,results,subflow):
                 results[subflow]['large']['size'].append(size)
                 results[subflow]['large']['fct'].append(fct_ms)
 
+            # size=int(arr[0].split(':')[1])
+            # fct_ms=float(arr[1].split(':')[1])/1000.0;
+            # if  size < 100*1024:
+            #     results[subflow]['small']['size'].append(size)
+            #     results[subflow]['small']['fct'].append(fct_ms)
+            # elif size>=100*1024 and size <10 * 1024 * 1024:
+            #     results[subflow]['medium']['size'].append(size)
+            #     results[subflow]['medium']['fct'].append(fct_ms)
+            # elif size>=10 * 1024 * 1024:
+            #     results[subflow]['large']['size'].append(size)
+            #     results[subflow]['large']['fct'].append(fct_ms)
+
             results[subflow]['all']['size'].append(size)
             results[subflow]['all']['fct'].append(fct_ms)
-
             size_transfer+=size
     results[subflow]['total_GB']=float("{0:.4f}".format(size_transfer/(1024.0*1024.0*1024.0)))
     

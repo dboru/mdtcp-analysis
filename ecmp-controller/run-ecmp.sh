@@ -11,10 +11,10 @@ queue_size=400
 # test=0 throughput test, test=1 FCT
 qmon=1
 bwm=0
-tcpdump=1
+tcpdump=0
 tcpprobe=0
 
-num_reqs=5000
+num_reqs=1000
 cdir=$(pwd)
 echo $cdir
 export PYTHONPATH=${PYTHONPATH}:$cdir/src
@@ -49,7 +49,7 @@ do
     for WORKLOAD in 'one_to_several';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 1.0 ; 
+    for load in 0.2 0.6 ; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
@@ -72,7 +72,7 @@ do
       do 
         for proto in 1 0 ;
         do 
-          for subflows in 1 2 ; 
+          for subflows in 1 2 4; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
@@ -148,10 +148,10 @@ do
 
                 # Plots 
 
-                  # if [ $mytest -eq 1 ]
-                  # then 
-                  #   python src/process/process_fct.py  -s $subflows -f results/$subdir/$WORKLOAD/*/flows_10* -o plots/$subdir-$WORKLOAD.png
-                  # fi
+                   if [ $mytest -eq 1 ]
+                   then 
+                     python src/process/process_fct.py  -s $subflows -f results/$subdir/$WORKLOAD/*/flows_10* -o plots/$subdir-$WORKLOAD.png
+                   fi
 
                   if [ $qmon -eq 1 ]
                   then
