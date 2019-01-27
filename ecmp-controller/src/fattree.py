@@ -6,7 +6,7 @@ import sys
 #sys.path.append(".")
 
 from mininet.topo import Topo
-from mininet.node import Controller, RemoteController, OVSKernelSwitch, CPULimitedHost
+from mininet.node import Controller, RemoteController, OVSKernelSwitch, Host,CPULimitedHost
 from mininet.net import Mininet
 from mininet.link import TCLink
 from mininet.cli import CLI
@@ -20,6 +20,7 @@ from DCTopo import FatTreeTopo, NonBlockingTopo
 from DCRouting import Routing
 
 from threading import Timer
+import threading
 
 # For custom ECMP 
 # from DCTopo import FatTreeTopo
@@ -44,14 +45,6 @@ import datetime
 
 
 
-###################################### Hash & Dijkstras Test ######################################################
-# import networkx as nx
-# from Hashed import HashHelperFunction
-# from Dijkstras import dijkstraHelperFunction
-# G=nx.Graph()
-###################################### Hash & Dijkstras Test ######################################################
-
-
 # Number of pods in Fat-Tree 
 K = 4
 
@@ -71,10 +64,6 @@ parser = ArgumentParser(description="minient_fattree")
 
 parser.add_argument('-d', '--dir', dest='output_dir', default='log',
         help='Output directory')
-
-# parser.add_argument('-i', '--input', dest='input_file',
-#         default='inputs/all_to_all_data',
-#         help='Traffic generator input file')
 
 parser.add_argument('-t', '--time', dest='time', type=int, default=30,
         help='Duration (sec) to run the experiment')
@@ -198,6 +187,51 @@ parser.add_argument('--tcpprobe',
 
 args = parser.parse_args()
 
+class ClientThread(threading.Thread):
+    def __init__(self,nm,me,hosts):
+        threading.Thread.__init__(self,name=nm)
+        self.hosts=hosts
+        self.me = me
+        self.done = False
+        self.prog= None
+        self.mean_iat=0.2
+        self.prev_time=0
+
+    def run(self):
+        while not self.done:
+            dst=random.choice(self.hosts)
+            fs=random.randrange(1000,30000000)
+            self.prog=self.me.popen(["/usr/bin/iperf","-c",dst.IP(),"-bw",\
+                str(args.bw*args.load)+"M","-n",str(fs),"-l 1","yC",">>",str(args.output_dir),"/flows_10 &"])
+            self.prog.wait()
+            self.prog=None
+            nexttime=random.expovariate(self.mean_iat)
+            tsleep=nexttime-self.prev_time
+            self.prev_time=nexttime
+            sleep(random.expovariate(tsleep))
+
+    def stop():
+        self.done=True
+        if self.prog is not None:
+            self.prog.terminate()
+            self.prog.kill()
+class TestHost(Host):
+    def __init__(self,name,**kwargs):
+        Host.__init__(self,name,**kwargs)
+        self.iperf_server=None
+        self.client=None
+    def startServer(self):
+        self.iperf_server=self.popen(["/usr/bin/iperf","-s"],stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
+    def startClient(self,hosts):
+        self.client=ClientThread(self.name+"cl",self,hosts)
+        self.client.start()
+    def stopAll(self):
+        if self.client is not None:
+            self.client.stop()
+        if self.iperf_server is not None:
+            self.iperf_server.terminate()
+
+
 def median(l):
     "Compute median from an unsorted list of values"
     s = sorted(l)
@@ -234,16 +268,42 @@ def getClntServMapping(yclnt):
             fp.close()
     return clnt
 
-def readTrace():
-    trace=[]
 
+def getFlow():
+    flows=[]
     with open("../Trace-generator/trace_file/mdtcp-output.trace") as fp:
         lines = fp.readlines()
+        llast=None
         for line in lines:
-            trace.append(line.split())
-    return trace
-            
+            flows.append(line.split())
+            llast=line.split()
+        if llast:
+            flows.append(float(llast[6]))
+    return flows
 
+def ipHost(ip,net):
+
+    for h in net.hosts:
+        if ip==h.IP():
+            return h
+    return None
+
+def layer(name):
+        ''' Return layer of node '''
+        # node = self.node_gen(name = name)
+        # print(name)
+        name_str=name.split('h')
+        if int(name_str[0])==args.K:
+            return 'core'
+        elif int(name_str[2])==1:
+            if int(name_str[1]) < args.K/2:
+                return 'edge'
+            else:
+                return 'agg'
+        else:
+            return 'host'
+
+            
 def start_tcpdump(output_dir,iface):
     Popen("tcpdump -i %s -s 96 net 10.0.0.0/16 or net 10.1.0.0/16 or \
         net 10.2.0.0/16 or net 10.3.0.0/16 -C 100 -w %s/trace-%s-%s.dmp \
@@ -251,16 +311,18 @@ def start_tcpdump(output_dir,iface):
     
 def start_bwmng(output_dir):
     if args.iter==1 and args.bwm_ng:
-        Popen('bwm-ng -t 100 -T rate -c 0  -o csv -C , -F %s/rates_iter.txt &'%(output_dir), shell=True)
+        # t option displays and gather stats every x (500ms default) ms
+        Popen('bwm-ng -t 1000 -T rate -c 0  -o csv -C , -F %s/rates_iter.txt &'%(output_dir), shell=True)
 
 class Workload():
     def __init__(self, net, iperf, seconds):
         self.iperf = iperf
         self.seconds = seconds
         self.mappings = []
-        self.incast_mappings=[]
         self.net = net
         self.conn_perhost=1
+        # mean flow inter-arrival time (sec)
+        self.period_sec=1.0
 
     def run(self, output_dir,subflows):
         servers = list(set([mapping[0] for mapping in self.mappings]))
@@ -281,7 +343,7 @@ class Workload():
             for iface in interfaces:
                 
                 if iface.split('-')[0] in switch_names:             
-                    sw=self.layer(iface.split('-')[0])
+                    sw=layer(iface.split('-')[0])
                     if  args.tcpdump and args.iter==1 and sw =='edge' and ('eth1' in iface or 'eth2' in iface):
                         start_tcpdump(output_dir,iface)
                         # Popen("tstat -l -N net.conf -i %s -s %s/trace-iface-%s"%(iface,output_dir,iface), shell=True)    
@@ -294,7 +356,8 @@ class Workload():
             if args.tcpprobe and args.iter==1:
                 start_tcpprobe(output_dir,"cwnd.txt")
 
-            self.ditg_flow_gen(output_dir)
+            #self.flow_ditg(output_dir)
+            self.iperf_fct(output_dir)
 
             # self.generate_request(output_dir,subflows)
                 
@@ -314,11 +377,6 @@ class Workload():
                 start_bwmng(output_dir)
             sleep(args.time)
             os.system('killall -9 bwm-ng ss ping tcpdump')
-
-
-        # get_rates(interfaces, output_dir)
-        # time_run=time.time()+300
-        # and time.time()-time_run < 0
         if args.test==0:
              os.system('killall -9 bwm-ng ss ping tcpdump')
              stop_tcpprobe()
@@ -327,147 +385,76 @@ class Workload():
         if args.qmon==1:
             for qmon in qmons:
                 qmon.terminate()
-    def layer(self, name):
-        ''' Return layer of node '''
-        # node = self.node_gen(name = name)
-        # print(name)
-        name_str=name.split('h')
-        if int(name_str[0])==args.K:
-            return 'core'
-        elif int(name_str[2])==1:
-            if int(name_str[1]) < args.K/2:
-                return 'edge'
+    
+    def iperf_fct(self,output_dir):
+        # self.mappings((server,client,int(flow[5]),float(flow[6])))
+        # Exchange role of client and server for iperf (since client is data sender)
+        servers = list(set([mapping[1] for mapping in self.mappings]))
+        port_map={}
+        for server in servers:
+            port=random.randrange(1000,10000)
+            port_map[server]=port
+            server.cmd('iperf -s -p %d >> /dev/null & '%port)
+        sleep(2)
+        n=0
+        prev_time=0.0
+        for mapping in self.mappings:
+            client,server,fs,start_time = mapping
+            if n==0:
+                sleep(start_time)
+                prev_time=start_time
+
             else:
-                return 'agg'
-        else:
-            return 'host'
-    
+                sleep(start_time-prev_time)
+                prev_time=start_time
 
-    def ditg_flow_gen(self,output_dir):
-        for server in self.net.hosts:
-            server.cmd("ITGRecv >> /dev/null &")
-        sleep(5)
-        trace=readTrace()
+            client.cmd("iperf -c %s -p %d -b %dM -e -n %d -l 1 -yC >> %s/flows_10 & " \
+                        % (server.IP(),port_map[server], int(args.bw),fs,output_dir))
+            n+=1
+            
 
-        # rate=(args.load*args.bw)/(8*1500*1e-6)
-        rate=(args.bw)/(8*1024*1e-6)
-        print(rate)
+        sleep(60)
+                    
 
-        count=0
-        cur_time=time.time()
-        last_time=0
-        prev_time=0.0 
-        bwmng=0
-
-        for clnt in self.net.hosts:
-            with open('clnt_%s'%clnt.IP(),'w') as file:
-                # os.system('cat > clnt_%s<<END\n'%clnt.IP())
-                for conn in trace:
-                    if clnt.IP()==conn[1]:
-                        server=None
-                        for serv in self.net.hosts:
-                            if serv.IP()==conn[2]:
-                                server=serv
-                                break;
-                        delayms=1000*float(conn[6])
-                        last_time=float(conn[6])
-                        fs=int(conn[5])
-                        if fs > 1024:
-                            fs=fs/1024
-                        else:
-                            fs=1
-                        file.write('-a %s -C %d -c 1024 -T TCP -k %d -t 10000 -d %f -rp 5001\n'%\
-                            (server.IP(),rate,fs,delayms))
-                file.close()
-
-        for client in self.net.hosts:
-            client.cmd("ITGSend clnt_%s -l %s/sender_%s & "%(client.IP(),output_dir,client.IP()))
-        print(last_time)
-        sleep(last_time+120)
-
-    
-    def send_request(self,client, server,servport,flowsize,output_dir):
-        client.popen("./../hk-traffic-generator/bin/simple-client -s  %s  -p %d  -n %d -c 1 >> %s/flows_10 &" % \
-          (server.IP(), servport, flowsize, output_dir),shell=True)
+    def send_request(self,client, server,port,flowsize,output_dir):
+        client.popen("./../hk-traffic-generator/bin/simple-client -s  %s  -p %d -n %d \
+            -c 1 >> %s/flows_10 &" % (server.IP(), port, flowsize, output_dir),shell=True)
         
     def generate_request(self,output_dir,subflows):
-        load=int(args.bw*args.load/self.conn_perhost)
-        server_port_map={}
-        hosts=self.net.hosts
-        for sserver in hosts:
-            servport=5001
-            #sserver.cmd('while sleep 1; do ss -i -t -4 ; done > %s/server-'+sserver.IP()+' &' % output_dir)
-            sserver.cmd( "./../hk-traffic-generator/bin/server -p %s  >> /dev/null & " % servport)
-        
-        
-        sleep(5)
+        load=int(args.bw*args.load)
 
-        trace=readTrace()
-        count=0
-        cur_time=time.time()
-        last_time=0
-        prev_time=0.0 
-        bwmng=0
-        for conn in trace:
-            count=count+1
-            if count > (len(trace)-1):
-                stop_tcpprobe()
-                break
-            client=None
-            server=None
-            for h in hosts:
-                if h.IP()==conn[1]:
-                   client=h
-                if h.IP()==conn[2]:
-                   server=h
-                if client and server:
-                   break
-            flowsize=int(conn[5])
-            start_time=float(conn[6])
-            interval=start_time-prev_time
+        # self.mappings((server,client,int(flow[5]),float(flow[6])))
+        servers = list(set([mapping[0] for mapping in self.mappings]))
+        port_map={}
+        for server in servers:
+            port=random.randrange(1000,10000)
+            port_map[server]=port
+            server.cmd( "./../hk-traffic-generator/bin/server -p %d  >> /dev/null & " % port)
+        sleep(2)
 
-            next_request=trace[count]
-            next_time=float(next_request[6])
-            last_time=next_time
-
-            # print(start_time,interval)
-            # Timer(interval, self.send_request,(client,server,5001,flowsize,output_dir)).start()
-            prev_time=start_time
-
+        for mapping in self.mappings:
+            server,client,fs,start_time = mapping
             client.cmd("./../hk-traffic-generator/bin/simple-client -s  %s  -p %d  -n %d \
-                -c 1 >> %s/flows_10 &" % (server.IP(), 5001, flowsize, output_dir))
+               -c 1 >> %s/flows_10 &" % (server.IP(), port_map[server], fs, output_dir))
+            sleep(start_time)
             
-            sleep(interval)
-
-            if count > len(self.net.hosts)/2 and bwmng==0 :
+            # Timer(start_time, self.send_request,(client,server,port_map[server],fs,output_dir)).start()
+            
+        sleep(300)
+        if count > len(self.net.hosts)/2 and bwmng==0 :
                 start_bwmng(output_dir)
                 bwmng=1
-
-        # print(time.time()-cur_time,last_time)
         
-        sleep(60)
         os.system('killall -9 tcpdump tstat ss bwm-ng')
        
-        # while True:
-        #     clnt=os.popen("ps ax | grep 'ps ax | grep ITGSend' | wc -l").read()
-        #     nclnt=clnt.split('\n')
-        #     if  len(nclnt) == 2 and int(nclnt[0]) < 4:
-        #         # Popen(' mergecap -a -F pcap -w %s/trace.pcap *.pcap'%output_dir,shell=True)
-        #         # Popen('rm %s/trace-10.*'%output_dir,shell=True)
-        #         os.system('killall -9 tcpdump tstat ss bwm-ng')
-        #         break
-        #     else:
-        #         sleep(1)
-            
+             
     def emptraffic_generator(self, output_dir):
         # timeDelay=5.0 
         for mapping in self.mappings:
             server, client = mapping
              
             port=random.randrange(5000,10000)
-            # port=5001
             server.cmd('./../emp-tg/bin/server -p '+str(port) +'  >> /dev/null &')
-            
             client.cmd('rm ../emp-tg/conf/client_'+client.IP()+'_to_'+server.IP())
             client.cmd('echo server '+ server.IP() +' '+ str(port) +' >> ../emp-tg/conf/client_'+client.IP()+'_to_'+server.IP())
             client.cmd('echo req_size_dist ../emp-tg/conf/DCTCP_CDF.txt >> ../emp-tg/conf/client_'+client.IP()+'_to_'+server.IP())
@@ -479,10 +466,7 @@ class Workload():
                  '  -s ' +str(random.randrange(100,50000))+\
                  ' -l flows_'+client.IP()+'_to_'+server.IP()+'_iter'+str(args.iter)+ \
                  '  > log_'+client.IP()+'_to_'+server.IP()+'_iter'+ str(args.iter)+ ' &')
-            # if args.iter==1:
-            #      client.cmd('while sleep 1; do ss -i -t -4 | grep \'ESTAB\|cwnd\'; done > ss_clnt_'+client.IP()+'_to_serv_'+server.IP()+'&')
-            #      # server.cmd('while sleep 1; do ss -i -t -4 | grep \'ESTAB\|cwnd\'; done  > ss_serv_'+server.IP()+'_to_clnt_'+client.IP()+'&')
-
+            
             sleep(random.randrange(10,1000)/1000.0)
  
         
@@ -518,80 +502,70 @@ class OneToOneWorkload(Workload):
     def __init__(self, net, iperf, seconds):
         Workload.__init__(self, net, iperf, seconds)
         hosts = list(net.hosts)
-        shuffle(hosts)
-        group1, group2 = hosts[::2], hosts[1::2]
-        self.create_mappings(list(group1), list(group2))
-        self.create_mappings(group2, group1)
-
+        clnts=[]
+        serv=[]
+        self.conn_perhost=1
+        if args.mdtcp and args.subflows==1:
+            shuffle(hosts)
+            group1, group2 = hosts[::2], hosts[1::2]
+            self.create_mappings(list(group1), list(group2))
+            self.create_mappings(group2, group1)
+            for mapping in self.mappings:
+                server,client = mapping
+                clnts.append(client)
+                serv.append(server)
+            saveClntServMapping(clnts,True)
+            saveClntServMapping(serv,False)
+        else:
+            clnts=getClntServMapping(True)
+            serv=getClntServMapping(False)
+            for i in range(len(clnts)):
+                for h in hosts:
+                    if str(h) in serv[i].split('\n')[0]:
+                        srv=h
+                        for hh in hosts:
+                            if clnts[i].split('\n')[0] in str(hh):
+                                clnt=hh
+                                self.mappings.append((srv, clnt))
+                                break
     def create_mappings(self, group1, group2):
         while group1:
             server = choice(group1)
             group1.remove(server)
             client = choice(group2)
             group2.remove(client)
-            self.mappings.append((server, client)) 
+            self.mappings.append((server, client))
 
-
-class PermutationMatrix(Workload):
+class OneToSeveralFCT(Workload):
     def __init__(self, net, iperf, seconds, num_conn=1):
         Workload.__init__(self, net, iperf, seconds)
-        #num_conn=random.randrange(1,3)
-        #num_conn=6
         self.conn_perhost=num_conn
-        
-        self.create_mappings(net.hosts, num_conn,net.hosts)
+        self.create_mappings(net)
 
-    def create_mappings(self, group, num_conn,nets):
-        clnts=[]
-        serv=[]
-        used_server=[]
-        clients=(list(group))
-        shuffle(clients)
-        group=(list(group))
-        shuffle(group)
-
-        if args.mdtcp and args.subflows==1:
-            for client in clients:
-                mapped=False
-                while True:
-                    for server in group:
-                        if server not in used_server and server !=client:
-                            clnts.append(client)
-                            serv.append(server)
-                            self.mappings.append((server, client))                        
-                            used_server.append(server)
-                            mapped=True
-                            break
-                    if mapped:
-                        break
-
-            saveClntServMapping(clnts,True)
-            saveClntServMapping(serv,False)
-
-        else:
-            clnts=getClntServMapping(True)
-            serv=getClntServMapping(False)
-            for i in range(len(clnts)):
-                for h in nets:
-                    if str(h) in serv[i].split('\n')[0]:
-                        srv=h
-                        for hh in nets:
-                            if clnts[i].split('\n')[0] in str(hh):
-                                clnt=hh
-                                self.mappings.append((srv, clnt))
-                                break
+    def create_mappings(self,net):
+        flows=getFlow()
+        count=0
+        for flow in flows:
+            count+=1
+            if count ==(len(flows)-2):
+                self.period_sec=float(flow[6])
+                break
+            else:               
+                client=ipHost(flow[1],net)
+                server=ipHost(flow[2],net)
+                if client and server:
+                    # for clnt,server,flowsize,start_time
+                    self.mappings.append((server,client,int(flow[5]),float(flow[6])))
 
 class OneToSeveralWorkload(Workload):
     def __init__(self, net, iperf, seconds, num_conn=3):
         Workload.__init__(self, net, iperf, seconds)
-        #num_conn=random.randrange(1,3)
-        #num_conn=6
         self.conn_perhost=num_conn
         self.create_mappings(net.hosts, num_conn,net.hosts)
-    def create_mappings(self, group, num_conn,nets):
+    def create_mappings(self, group, num_conn,hosts):
         clnts=[]
         serv=[]
-        if args.mdtcp or args.mdtcp==0:
+        if args.mdtcp and args.subflows==1:
             for server in group:
                 clients = list(group)
                 clients.remove(server)
@@ -606,31 +580,14 @@ class OneToSeveralWorkload(Workload):
             clnts=getClntServMapping(True)
             serv=getClntServMapping(False)
             for i in range(len(clnts)):
-                for h in nets:
+                for h in hosts:
                     if str(h) in serv[i].split('\n')[0]:
                         srv=h
-                        for hh in nets:
+                        for hh in hosts:
                             if clnts[i].split('\n')[0] in str(hh):
                                 clnt=hh
                                 self.mappings.append((srv, clnt))
                                 break
-
-class OneToSeveralOffPodWorkload(Workload):
-    def __init__(self, net, iperf, seconds, num_conn=2):
-        Workload.__init__(self, net, iperf, seconds)
-        # num_conn=randrange(1,2)
-        self.create_mappings(net.hosts, num_conn)
-
-    def create_mappings(self, group, num_conn):
-
-        for server in group:
-            clients = list(group)
-            # remove self
-            clients.remove(server)
-            shuffle(clients)
-
-            for client in clients[:num_conn]:
-                self.mappings.append((server, client))
 
 class AllToAllWorkload(Workload):
     def __init__(self, net, iperf, seconds):
@@ -645,12 +602,9 @@ class AllToAllWorkload(Workload):
 
 def get_workload(net):
     if args.workload == "one_to_one":
-        # return OneToOneWorkload(net, args.iperf, args.time)
-        # Permutation==OneToOne but Permu.. enables the same 
-        # clnt-server mapping test for all protocols
-        return PermutationMatrix(net, args.iperf, args.time)
+        return OneToOneWorkload(net, args.iperf, args.time)   
     elif args.workload == "one_to_several":
-        return OneToSeveralWorkload(net, args.iperf, args.time)
+        return OneToSeveralFCT(net, args.iperf, args.time)
     else:
         return AllToAllWorkload(net, args.iperf, args.time)
 
