@@ -394,10 +394,11 @@ class Workload():
         for server in servers:
             port=random.randrange(1000,10000)
             port_map[server]=port
-            server.cmd('iperf -s -p %d >> /dev/null & '%port)
+            server.cmd('iperf -s  -p %d >> /dev/null & '%port)
         sleep(2)
         n=0
         prev_time=0.0
+        bwmng=0
         for mapping in self.mappings:
             client,server,fs,start_time = mapping
             if n==0:
@@ -408,9 +409,13 @@ class Workload():
                 sleep(start_time-prev_time)
                 prev_time=start_time
 
-            client.cmd("iperf -c %s -p %d -b %dM -e -n %d -l 1 -yC >> %s/flows_10 & " \
-                        % (server.IP(),port_map[server], int(args.bw),fs,output_dir))
+            client.cmd("iperf -c %s  -p %d -b %dM  -n %d -l %d -yC >> %s/flows_10 & " \
+                        % (server.IP(),port_map[server], int(args.bw*args.load),fs,fs,output_dir))
             n+=1
+            
+            if n > len(self.net.hosts)/2 and bwmng==0 :
+                start_bwmng(output_dir)
+                bwmng=1
             
 
         sleep(60)
@@ -681,7 +686,7 @@ def start_tcpprobe(outdir="test",outfile="cwnd.txt"):
 def stop_tcpprobe():
     Popen("killall -9 cat", shell=True).wait()
 
-def FatTreeNet(args, bw=10, cpu=-1, queue=100, controller='DCController'):
+def FatTreeNet(args, bw=10, cpu=-1, queue=400, controller='DCController'):
     droptail = {'max_queue_size': args.queue}
     red = {'max_queue_size': args.queue,'enable_red':1,'enable_ecn': 0, \
     'red_burst':55,'red_prob':0.01,'red_avpkt':1000,\
@@ -692,9 +697,10 @@ def FatTreeNet(args, bw=10, cpu=-1, queue=100, controller='DCController'):
             'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 400000}
 
     info('*** Creating the topology')
+    # ,delay=str(args.delay)+'ms',
     topo = FatTreeTopo(args.K)
     host = custom(CPULimitedHost, cpu=cpu)
-    if args.mdtcp or args.dctcp:
+    if args.mdtcp==1 or args.dctcp==1:
         link = custom(TCLink, bw=args.bw,delay=str(args.delay)+'ms',**red_ecn)
     else:
         link = custom(TCLink, bw=args.bw,delay=str(args.delay)+'ms',**red)
@@ -793,18 +799,23 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
                 node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
-                if args.mdtcp or args.dctcp:
-                    node.cmd(str.format('tc qdisc del dev {} root',port))
-                    node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
-                    node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 2: red limit 400000 min {} max {} avpkt 1000 burst {} \
-                        bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
+                if args.mdtcp==1 or args.dctcp==1:
+                    
+                    #node.cmd(str.format('tc qdisc del dev {} root',port))
+                    node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
+                    # node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
+                    # node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+                    #node.cmd(str.format('tc class add dev {} root handle 1: netem delay {}ms ', port,args.delay))
+                    #node.cmd(str.format('tc qdisc add dev {} parent 1: handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
+                    #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
                 else:
-                    node.cmd(str.format('tc qdisc del dev {} root',port))
-                    node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
-                    node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 2: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
-                        bandwidth {} probability 0.01',port,args.bw))
+                    #node.cmd(str.format('tc qdisc del dev {} root',port))
+                    node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
+                    # node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
+                    # node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+                    #node.cmd(str.format('tc class add dev {} parent handle 1: netem delay {}ms ', port,args.delay))
+                    #node.cmd(str.format('tc qdisc add dev {} parent 1: handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
+                    #     bandwidth {} probability 0.01',port,args.bw))
                     
 
     # disable offloading and configure qdisc on switch interfaces
@@ -819,7 +830,8 @@ def ConfigureOffloadingAndQdisc(args,net):
                 node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
                 node.cmd(str.format('tc qdisc del dev {} root',port))
                 node.cmd(str.format('tc qdisc add dev {} root handle 5:0 htb default 1', port))
-                node.cmd(str.format('tc class add dev {} parent 5:0 classid 5:1 htb rate {}Mbit ceil {}Mbit burst 15k', port,args.bw,args.bw))
+                node.cmd(str.format('tc class add dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
+                node.cmd(str.format('tc qdisc add dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
                 # node_route = node.cmd("ip route show")
                 # node_route=node_route.rstrip()
                 # node.popen('ip route replace %s %s %s' % (node_route, 'rto_min','10ms')).wait()
