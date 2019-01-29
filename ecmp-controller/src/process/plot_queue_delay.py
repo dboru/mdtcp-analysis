@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 
 import matplotlib as m
+from statsmodels.distributions.empirical_distribution import ECDF
 
 m.use('Agg')
 
@@ -21,7 +22,8 @@ parser.add_argument('-f', dest="files",nargs='+', required=True)
 
 parser.add_argument('-o', '--out', dest="out", default=None)
 parser.add_argument('-b', '--bw', dest="bw",type=int, default=10)
-parser.add_argument('-m', '--maxq', dest="maxq",type=int, default=1000)
+parser.add_argument('-m', '--maxq', dest="maxq",type=int, default=100)
+
 parser.add_argument('-p', '--proto', dest="proto", default=None)
 
 args = parser.parse_args()
@@ -32,6 +34,19 @@ cm = plt.get_cmap('gist_rainbow')
 
 colors=[cm(1.*i/NUM_COLORS) for i in range(NUM_COLORS)]
 
+
+def cdf(values):
+  values.sort()
+  prob = 0
+  l = len(values)
+  x, y = [], []
+
+  for v in values:
+      prob += 1.0 / l
+      x.append(v)
+      y.append(prob)
+
+  return x, y
 
 def plot_queue_stats(queue):
 
@@ -44,67 +59,48 @@ def plot_queue_stats(queue):
 
   fig = plt.figure()
 
-  axplot = fig.add_subplot(221)
+  axplot = fig.add_subplot(111)
 
-  axplot1 = fig.add_subplot(222)
+  # axplot1 = fig.add_subplot(222)
 
-  axplot2 = fig.add_subplot(223)
+  # axplot2 = fig.add_subplot(223)
 
   c=0;
-  max_q=0
-
+  
+  aqueue={'core':[],'agg':[],'edge':[]}
   for a in sorted(queue.keys()):
     if 'core' in a and len(queue[a]['time'])>0:
       # core.append(queue[a])
       # print(queue[a]['time'][0])
-      queue[a]['time'][0]=0
-      # if max(queue[a]['queue']) > max_q:
-      #   max_q=max(queue[a]['queue'])
-      #   print(len(queue[a]['queue']),max_q)
-      axplot.plot(queue[a]['time'],queue[a]['queue'],color=colors[c])
+      if len(aqueue['core'])==0:
+        aqueue['core']=queue[a]['queue']
+      else:
+        aqueue['core']=aqueue['core']+queue[a]['queue']
     elif 'agg' in a and len(queue[a]['time'])>0:
-      # print(a,queue[a]['queue'])
-      queue[a]['time'][0]=0
-      # if max(queue[a]['queue']) > max_q:
-      #   max_q=max(queue[a]['queue'])
-      #   print(len(queue[a]['queue']),max_q)
-      axplot1.plot(queue[a]['time'],queue[a]['queue'],color=colors[c])
-      # agg.append(queue[a])
+      if len(aqueue['agg'])==0:
+        aqueue['agg']=queue[a]['queue']
+      else:
+        aqueue['agg']=aqueue['agg']+queue[a]['queue']
+
     elif 'edge' in a and len(queue[a]['time'])>0:
-      
-      queue[a]['time'][0]=0
-      # if max(queue[a]['queue']) > max_q:
-      #   max_q=max(queue[a]['queue'])
-      #   print(len(queue[a]['queue']),max_q)
-      axplot2.plot(queue[a]['time'],queue[a]['queue'],color=colors[c])
-    if c==len(colors)-1:
-      c=0
-    else:
-      c=c+1
+      if len(aqueue['edge'])==0:
+        aqueue['edge']=queue[a]['queue']
+      else:
+        aqueue['edge']=aqueue['edge']+queue[a]['queue']
 
-      # edge.append(queue[a])
+  x,y=cdf(aqueue['core'])
+  axplot.plot(x,y,color='red',label='Core')
+  x,y=cdf(aqueue['agg'])
+  axplot.plot(x,y,color='blue',label='Agg')
+  x,y=cdf(aqueue['edge'])
+  axplot.plot(x,y,color='black',label='Edge')
+  
 
-  axplot.set_title('Core')
-  axplot.set_ylabel('Queue [Pkts]')
-  axplot.set_xticklabels([])
-  # axplot.set_xlim(5,30)
-  # axplot.set_ylim(0,max_q+5)
-
-  axplot1.set_title('Agg')
-  # axplot1.set_ylabel('Queue [Pkts]')
-  axplot1.set_xlabel('Time [secs]')
-  # axplot1.set_xlim(5,30)
-  # axplot1.set_ylim(0,max_q+5)
-  axplot1.grid(True)
-  axplot2.grid(True)
   axplot.grid(True)
-
-  axplot2.set_title('Edge')
-  axplot2.set_ylabel('Queue [Pkts]')
-  axplot2.set_xlabel('Time [secs]')
-  # axplot2.set_xlim(5,30)
-  # axplot2.set_ylim(0,max_q+5)
-  plt.savefig(args.out+'queue.pdf')
+  axplot.set_xlabel('Queuing delay [ms]')
+  axplot.set_ylabel('CDF')
+  axplot.legend(loc='lower right')
+  plt.savefig(args.out+'queuing-delay.pdf')
 
 
 def main():
@@ -132,12 +128,13 @@ def main():
           if len(aline)==2 and (int(aline[1])/1000.0) <=args.maxq:
             if first_entry==0:
               queue[layer]['time'].append(float(aline[0]))
-              queue[layer]['queue'].append((int(aline[1])/1500))
+              queue[layer]['queue'].append((0.008*int(aline[1])/args.bw))
               first_entry=1
             else:
               diff_time=float(aline[0])-queue[layer]['time'][0]
               queue[layer]['time'].append(diff_time)
-              queue[layer]['queue'].append((int(aline[1])/1500))
+              # queuing delay in ms
+              queue[layer]['queue'].append((0.008*int(aline[1])/args.bw))
 
 
   if queue:

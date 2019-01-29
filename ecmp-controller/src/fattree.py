@@ -404,13 +404,17 @@ class Workload():
             if n==0:
                 sleep(start_time)
                 prev_time=start_time
-
             else:
                 sleep(start_time-prev_time)
                 prev_time=start_time
 
+            # nconn=os.popen("ps ax | grep %s | wc -l"%server.IP()).read()
+
+            # # nclnt=clnt.split('\n')
+            # print(nconn)
+
             client.cmd("iperf -c %s  -p %d -b %dM  -n %d -l %d -yC >> %s/flows_10 & " \
-                        % (server.IP(),port_map[server], int(args.bw*args.load),fs,fs,output_dir))
+                        % (server.IP(),port_map[server], int(args.bw),fs,fs,output_dir))
             n+=1
             
             if n > len(self.net.hosts)/2 and bwmng==0 :
@@ -418,7 +422,7 @@ class Workload():
                 bwmng=1
             
 
-        sleep(60)
+        sleep(120)
                     
 
     def send_request(self,client, server,port,flowsize,output_dir):
@@ -799,23 +803,32 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
                 node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
+                node.cmd(str.format('tc qdisc del dev {} root',port))
+                node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
+                node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
+                node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+
                 if args.mdtcp==1 or args.dctcp==1:
+                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
+                         bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
                     
-                    #node.cmd(str.format('tc qdisc del dev {} root',port))
-                    node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
-                    # node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
-                    # node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                    #node.cmd(str.format('tc class add dev {} root handle 1: netem delay {}ms ', port,args.delay))
-                    #node.cmd(str.format('tc qdisc add dev {} parent 1: handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
-                    #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
+                     # node.cmd(str.format('tc qdisc add dev {} root handle 1: netem rate {}Mbit delay {}ms drop 1.0 ecn', port,args.bw,args.delay))
+                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
+                     #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
+                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
+                     #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,10*args.bw, args.prob))
+                     # node.cmd(str.format('tc class add dev {} parent 1:1 handle 5: htb rate {}Mbit ', port,args.bw))
+                    
+                     
                 else:
-                    #node.cmd(str.format('tc qdisc del dev {} root',port))
-                    node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
-                    # node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
-                    # node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                    #node.cmd(str.format('tc class add dev {} parent handle 1: netem delay {}ms ', port,args.delay))
-                    #node.cmd(str.format('tc qdisc add dev {} parent 1: handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
-                    #     bandwidth {} probability 0.01',port,args.bw))
+                     
+                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
+                         bandwidth {} probability 0.01',port,args.bw))
+                     # # node.cmd(str.format('tc class add dev {} parent 1:1 handle 5: htb rate {}Mbit ', port,args.bw))                  
+                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
+                     #     bandwidth {} probability 0.01',port,args.bw))
+                
+                node.cmd(str.format('tc qdisc add dev {} parent 10:1 handle 20: netem delay {}ms limit {}', port,args.delay,args.queue))
                     
 
     # disable offloading and configure qdisc on switch interfaces
@@ -829,6 +842,7 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
                 node.cmd(str.format('tc qdisc del dev {} root',port))
+                # node.cmd(str.format('tc qdisc add dev {} root handle 1: netem delay {}ms rate {}Mbit', port,args.delay,args.bw))
                 node.cmd(str.format('tc qdisc add dev {} root handle 5:0 htb default 1', port))
                 node.cmd(str.format('tc class add dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
                 node.cmd(str.format('tc qdisc add dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                

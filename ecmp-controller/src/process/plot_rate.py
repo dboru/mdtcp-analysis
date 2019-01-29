@@ -50,13 +50,13 @@ def parse_file(file_name):
 
         # if float(arr[6]) < 300.0:
 
-        if  (float(arr[6])-tend<5.0):
+        if  (float(arr[6])-tend<1.0):
             # print(float(arr[6]),tend)
             size=size+int(arr[5])
             
         else:
             # print(size,8*1e-6*size,float(arr[6]))
-            rate.append(8*1e-6*size/5.0)
+            rate.append(8*1e-6*size/1.0)
             packets.append(1e-6*size/1500)
             ttime.append(float(arr[6]))
             tend=float(arr[6])
@@ -87,8 +87,8 @@ if __name__ == '__main__':
     
     fig = plt.figure()
     ax={}
-    for a in range(4):
-        ax[a]= fig.add_subplot(2,2,(a+1))
+    for a in range(1):
+        ax[a]= fig.add_subplot(1,1,(a+1))
         ax[a].grid(True)
     load=['20%','40%','60%','100%']
     
@@ -97,15 +97,16 @@ if __name__ == '__main__':
         rate,ttime=parse_file(f)
         label=(f.split('-')[1])
         ax[a].plot(ttime,rate,marker='.',color='red',label='Inst.rate')
-        ax[a].plot(ttime, movingaverage(rate,20),marker='.',color='blue',label='Mavg')
-        ax[a].set_title('('+str(a+1)+')'+' Load='+load[a],fontsize=8,loc='left')
+        ax[a].plot(ttime, movingaverage(rate,10),marker='.',color='blue',label='Mavg')
+        # ax[a].set_title('('+str(a+1)+')'+' Load='+load[a],fontsize=8,loc='left')
         # if a<2:
         #     ax[a].set_xticklabels(fontsize=8)
         if a>1:
             ax[a].set_xlabel('Time[secs]',fontsize=8)
         if a % 2==0:
-            ax[a].set_ylabel('Traffic rate [Mb/s]',fontsize=10)
-        ax[a].legend(ncol=2,loc='upper right',fontsize=10)
+            ax[a].set_ylabel('Traffic load [Mb/s]',fontsize=10)
+        ax[a].legend(ncol=2,loc='upper left',fontsize=10)
+        # ax[a].set_ylim(0,300)
         # ax[a].set_yticks(np.arange(0, 500, 50))
         a+=1
     

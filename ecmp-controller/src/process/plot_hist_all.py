@@ -118,8 +118,12 @@ for i in sorted(throughput.keys()):
   #fmdtcp.write(str(i)+','+str(avg)+','+str(avg_lci)+','+str(avg_hci)+'\n')
 
   tcp_points = sorted(vals)
-  xaxis = range(len(tcp_points)) 
-  slabel="MDTCP, "+str(i)+" subflows"
+  xaxis = range(len(tcp_points))
+  
+   
+  slabel=str(i)+" subflows"
+  
+
   axPlot.plot(xaxis, tcp_points, lw=2, label=slabel,color=colors[int(i)-1])
 fmdtcp.close()
 
@@ -151,7 +155,7 @@ axHist = fig.add_subplot(1, 1, 1)
 axHist.grid(True)
 axHist.bar(xaxis + xoffset+0.25, avgThroughput, width, color='k') #, yerr=menStd)
 
-axHist.set_xlabel("No. of MDTCP Subflows")
+axHist.set_xlabel("Number of subflows")
 axHist.set_ylabel("Throughput (% of optimal)")
 # # axHist.set_title( title )
 axHist.set_xticks(xaxis + width/2 + xoffset)

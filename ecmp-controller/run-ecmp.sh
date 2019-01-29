@@ -14,7 +14,8 @@ bwm=0
 tcpdump=0
 tcpprobe=0
 
-num_reqs=1000
+num_reqs=2000
+
 cdir=$(pwd)
 echo $cdir
 export PYTHONPATH=${PYTHONPATH}:$cdir/src
@@ -35,7 +36,7 @@ sleep 1
 
 # proto 0=mptcp, proto=1=mdtcp
 m=1
-bw=10
+bw=100
 delay=0.1
 
 seed=754
@@ -49,7 +50,7 @@ do
     for WORKLOAD in 'one_to_several';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 0.2 0.6 ; 
+    for load in 0.2 0.5 ; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
@@ -72,7 +73,7 @@ do
       do 
         for proto in 1 0 ;
         do 
-          for subflows in 1 2 4; 
+          for subflows in 1 2 3 4; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
@@ -95,7 +96,7 @@ do
               redburst=31
             	redprob=1
             	enable_ecn=1
-            	enable_red=1
+            	enable_red=0
             	mdtcp=1
             	dctcp=0
 
@@ -131,18 +132,19 @@ do
                   
                   out_dir=results/$subdir/$WORKLOAD
 
-                  if [ $mytest -eq 1 ];
-                  then 
-                    cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir/requests_load$dload
-                  fi
                   
-                  
-
                   python src/fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
                   --workload $WORKLOAD --K $pod --bw $bw --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\
                   --redmin $redmin --burst  $redburst --queue  $queue_size --prob $redprob --enable_ecn $enable_ecn\
                   --enable_red $enable_red --subflows $subflows --mdtcp_debug $mdtcp_debug --num_reqs $num_reqs\
                   --test $mytest --qmon $qmon --iter $m   --load $load --bwm  $bwm --tcpdump $tcpdump --tcpprobe $tcpprobe
+
+                  if [ $mytest -eq 1 ];
+                  then 
+                    cp ../Trace-generator/trace_file/mdtcp-output.trace $out_dir
+                    mv $out_dir/mdtcp-output.trace $out_dir/requests_load$dload
+                  fi
+
 
                   sudo mn -c
 
@@ -157,7 +159,9 @@ do
                   then
                     for f in $subflows
                     do
-                      python src/process/plot_queue_monitor.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -o plots/$subdir-$WORKLOAD-flows$f
+                      python src/process/plot_queue_monitor.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw -m $queue_size -o plots/$subdir-$WORKLOAD-flows$f
+                      python src/process/plot_queue_delay.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw  -m $queue_size  -o plots/$subdir-$WORKLOAD-flows$f
+
                     done
                   fi
 
@@ -193,6 +197,7 @@ do
       done #load for FCT test
     done #workload
   done #mytest
+
   m=$(( m + 1 ))
 
 done # while

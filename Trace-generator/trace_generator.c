@@ -16,8 +16,8 @@ int    flow_total_time           = 0; /* total time to generate requests (in sec
 int    incast                    = 0; /* all-to-one when set to 1 */
 struct cdf_table *flow_size_dist = NULL; /* flow distribution table*/
 char   flow_cdf_file[100]        = "cdf/dctcp.cdf"; /* flow size distribution file */
-int    header_size               = 54;
-int    max_ether_size            = 1500;
+int    header_size               = 86; //54(TCP_hdr+IPv4_hdr+Ethernet) 86(MPTCP header,max_packet size 1428, TCP 1448) 
+int    max_ether_size            = 1514;//1500
 
 /* IP address configuration */
 const char * const host_ip[] = {
@@ -90,14 +90,14 @@ int main(int argc, char **argv)
 	float elephant_time[16];
 	// int  flows[16];
 
-	// double flows_time[16];
+	double flows_time[16];
 
 	int i=0;
 
 	for (i=0;i<16;i++){
 		elephant_time[i]=0.0;
 		// flows[i]=0;
-		// flows_time[i]=0.0;
+		flows_time[i]=0.0;
 	}
 
 	if (argc > 3) {
@@ -112,13 +112,16 @@ int main(int argc, char **argv)
 	flow_size_dist = (struct cdf_table*)malloc(sizeof(struct cdf_table));
 	init_cdf(flow_size_dist);
 	load_cdf(flow_size_dist, flow_cdf_file);
+	// header_size=20B(IPv4)+20B(TCP+checksum)+14B(Ethernet)+4B(FCS)+12B(InterframeGap)+8B(Preamble)=78B
 
 	/* Average request arrival interval (in microsecond) */
-	//period_us = ((avg_cdf(flow_size_dist)*8.0/max_payload_size)*max_ether_size)/(host_num*load); 
+        double mean_flowsize = avg_cdf(flow_size_dist);      
+	period_us = 8.0*(mean_flowsize+(mean_flowsize*header_size/max_payload_size))/(host_num*load); 
+        printf("meanflowsize %f period_us %f\n", mean_flowsize,period_us);
 
-	period_us = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(host_num*load*max_payload_size); 
+	// period_us = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(host_num*load*max_payload_size); 
 	//per server period
-	float period_sec = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(load*max_payload_size*1000000.0); 
+	float period_sec = (8*avg_cdf(flow_size_dist)*max_ether_size)/(load*max_payload_size*1000000.0); 
 
 
 
@@ -168,10 +171,9 @@ int main(int argc, char **argv)
 		/*don't overload the server*/ 
 		//float period_sec=period_us/1000000.0;
 
-		// if ( (flow_start_time-flows_time[dst_host])<period_sec)
-		// 	continue;
-
-		// flows_time[dst_host]=flow_start_time;
+		//if ( (flow_start_time-flows_time[dst_host])<period_sec)
+		//	continue;
+		//flows_time[dst_host]=flow_start_time;
 
 
 		/* Incast: only accept dst_host = 0 */
