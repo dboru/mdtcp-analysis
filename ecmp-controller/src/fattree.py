@@ -923,7 +923,6 @@ def ConfigureOffloadingAndQdisc(args,net):
                 node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
                 node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
                 
-
     return net
 
 def allKiller():
