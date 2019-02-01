@@ -1,6 +1,3 @@
-'''
-based on riplpox 
-'''
 
 import sys
 #sys.path.append(".")
@@ -42,8 +39,6 @@ import pickle
 import sys
 import time
 import datetime 
-
-
 
 # Number of pods in Fat-Tree 
 K = 4
@@ -104,7 +99,7 @@ parser.add_argument('--enable_red',
 parser.add_argument('--delay',
                     help="Link propagation delay (ms)",
                     required=True,
-                    default='1ms')
+                    default="0.075ms  0.05ms distribution normal")
 
 parser.add_argument('--mdtcp',
                     type=int,
@@ -187,30 +182,103 @@ parser.add_argument('--tcpprobe',
 
 args = parser.parse_args()
 
+global Nreqs
+
+Nreqs=0
+
+def arrival_events(nreqs):
+    events=[]
+    for j in range(0,nreqs):
+        events.append(args.time*random.random())
+    events.sort()
+    return events
+
+def generate_IAT(mean_iat):
+    iat=[]
+    for a in range(50):
+        iat.append(random.expovariate(mean_iat))
+    return (sorted(iat))
+
+def getFlow():
+    flows=[]
+    with open("../Trace-generator/trace_file/mdtcp-output.trace") as fp:
+        lines = fp.readlines()
+        llast=None
+        for line in lines:
+            flows.append(line.split())
+            llast=line.split()
+        if llast:
+            flows.append(float(llast[6]))
+    return flows
+def ipToHost(ip,hosts):
+    for h in hosts:
+        if ip==h.IP():
+            return h
+    return None
+
+def myLoad(myIP,hosts):
+    flows=[]
+    with open("../Trace-generator/trace_file/mdtcp-output.trace") as fp:
+        lines = fp.readlines()
+        for line in lines:
+            aline=line.split()
+            if myIP==aline[1]:
+                server=ipToHost(aline[2],hosts)
+                flows.append((server,int(aline[5]),float(aline[6])))            
+    del flows[-1]
+    return flows
+
+def getRunTime():
+    fp=open("../Trace-generator/trace_file/mdtcp-output.trace",'r')
+    lines = fp.readlines()
+    aline=lines[-2].split()
+    return float(aline[6])
+
+            
 class ClientThread(threading.Thread):
-    def __init__(self,nm,me,hosts):
+    def __init__(self,nm,me,hosts,out_dir=args.output_dir):
         threading.Thread.__init__(self,name=nm)
         self.hosts=hosts
         self.me = me
         self.done = False
         self.prog= None
-        self.mean_iat=0.2
-        self.prev_time=0
+        self.out_dir=out_dir
+        self.counter=0
+        self.myload=myLoad(self.me.IP(),self.hosts)
+        self.nreqs=len(self.myload)
 
     def run(self):
+        
         while not self.done:
-            dst=random.choice(self.hosts)
-            fs=random.randrange(1000,30000000)
-            self.prog=self.me.popen(["/usr/bin/iperf","-c",dst.IP(),"-bw",\
-                str(args.bw*args.load)+"M","-n",str(fs),"-l 1","yC",">>",str(args.output_dir),"/flows_10 &"])
-            self.prog.wait()
-            self.prog=None
-            nexttime=random.expovariate(self.mean_iat)
-            tsleep=nexttime-self.prev_time
-            self.prev_time=nexttime
-            sleep(random.expovariate(tsleep))
+            if self.counter < self.nreqs:
+                dst,fs,tstart=self.myload[self.counter]
+                if self.counter==0:
+                    sleep(tstart)
+                # self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-t",str(10),'-i',str(1),'-yC'],stdout=open(self.out_dir+"/flows_10.txt","a"),stderr=subprocess.STDOUT)
+                
+                # self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-b",\
+                #     str(args.bw)+"M","-n",str(fs),"-l",str(fs),"-yC"],\
+                #     stdout=open(self.out_dir+'/flows_10',"a+"),stderr=subprocess.STDOUT)
 
-    def stop():
+                self.prog=self.me.popen(["./../hk-traffic-generator/bin/simple-client", "-s", \
+                    dst.IP(),"-p","5001","-n",str(fs),"-c","1"],\
+                    stdout=open(self.out_dir+'/flows_10',"a+"),stderr=subprocess.STDOUT)
+                
+                # self.prog.wait()
+                # Note: expovariate (small values e.g., 0.1,0.2 give large values)
+                #       large mean_iat increases the frequency of request 
+                self.prog=None
+                if (self.counter+1)<(self.nreqs-1):
+                    dst,fs,nextime=self.myload[self.counter+1]
+                    # print self.me.IP() + " reqs "+str(self.nreqs)+" count:"+str(self.counter)+" ntime "+str(nextime)
+                    sleep(nextime-tstart)
+                    self.counter+=1
+                    # print self.me.IP() + " reqs "+str(self.nreqs)+" count:"+str(self.counter)
+                   
+                else:
+                    self.done=True
+
+    def stop(self):
         self.done=True
         if self.prog is not None:
             self.prog.terminate()
@@ -221,16 +289,21 @@ class TestHost(Host):
         self.iperf_server=None
         self.client=None
     def startServer(self):
-        self.iperf_server=self.popen(["/usr/bin/iperf","-s"],stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
-    def startClient(self,hosts):
-        self.client=ClientThread(self.name+"cl",self,hosts)
+        self.iperf_server=self.popen(["/usr/local/bin/iperf", "-s"],\
+            stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
+
+    def startEmpServer(self):
+        self.iperf_server=self.popen(["./../hk-traffic-generator/bin/server",\
+         "-p","5001"],stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
+
+    def startClient(self,hosts,out_dir):
+        self.client=ClientThread(self.name+"cl",self,hosts,out_dir)
         self.client.start()
     def stopAll(self):
         if self.client is not None:
             self.client.stop()
         if self.iperf_server is not None:
             self.iperf_server.terminate()
-
 
 def median(l):
     "Compute median from an unsorted list of values"
@@ -269,18 +342,6 @@ def getClntServMapping(yclnt):
     return clnt
 
 
-def getFlow():
-    flows=[]
-    with open("../Trace-generator/trace_file/mdtcp-output.trace") as fp:
-        lines = fp.readlines()
-        llast=None
-        for line in lines:
-            flows.append(line.split())
-            llast=line.split()
-        if llast:
-            flows.append(float(llast[6]))
-    return flows
-
 def ipHost(ip,net):
 
     for h in net.hosts:
@@ -312,7 +373,34 @@ def start_tcpdump(output_dir,iface):
 def start_bwmng(output_dir):
     if args.iter==1 and args.bwm_ng:
         # t option displays and gather stats every x (500ms default) ms
-        Popen('bwm-ng -t 1000 -T rate -c 0  -o csv -C , -F %s/rates_iter.txt &'%(output_dir), shell=True)
+        Popen('bwm-ng -t 1000 -T rate -c 0  -o csv -C , -F \
+            %s/rates_iter.txt &'%(output_dir), shell=True)
+
+def start_qmon(iface, interval_sec=0.1, outfile="q.txt"):
+    monitor = Process(target=monitor_qlen,
+                      args=(iface, interval_sec, outfile))
+    monitor.start()
+    return monitor
+
+def monitor_queue(net,output_dir):
+    interfaces = []
+    qmons = []
+    for node in net.switches:
+        for intf in node.intfList():
+            if intf.link:
+                interfaces.append(intf.link.intf1.name)
+                interfaces.append(intf.link.intf2.name)
+
+    switch_names = [switch.name for switch in net.switches]
+    for iface in interfaces:
+        if iface.split('-')[0] in switch_names:             
+            sw=layer(iface.split('-')[0])
+            if  args.tcpdump and args.iter==1 and sw =='edge' and ('eth1' in iface or 'eth2' in iface):
+                start_tcpdump(output_dir,iface)
+
+            qmons.append(start_qmon(iface,outfile="%s/queue_size_%s-%s_iter%s.txt"
+                                            % (output_dir, sw,iface,str(args.iter))))
+    return qmons
 
 class Workload():
     def __init__(self, net, iperf, seconds):
@@ -366,7 +454,7 @@ class Workload():
                 start_tcpprobe(output_dir,"cwnd.txt")
 
             for mapping in self.mappings:
-                sleep(0.2)
+                # sleep(0.2)
                 server, client = mapping
                 client.cmd('iperf -c '+ server.IP()+ ' -p 5001 -t '+ str(self.seconds)+ \
                     ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
@@ -405,6 +493,7 @@ class Workload():
                 sleep(start_time)
                 prev_time=start_time
             else:
+                #start_time+=0.1
                 sleep(start_time-prev_time)
                 prev_time=start_time
 
@@ -422,7 +511,7 @@ class Workload():
                 bwmng=1
             
 
-        sleep(120)
+        sleep(30)
                     
 
     def send_request(self,client, server,port,flowsize,output_dir):
@@ -438,7 +527,7 @@ class Workload():
         for server in servers:
             port=random.randrange(1000,10000)
             port_map[server]=port
-            server.cmd( "./../hk-traffic-generator/bin/server -p %d  >> /dev/null & " % port)
+        
         sleep(2)
 
         for mapping in self.mappings:
@@ -676,12 +765,6 @@ def get_rates(ifaces, output_dir, nsamples=NSAMPLES, period=SAMPLE_PERIOD_SEC,
         f.write("%f\n" % median(ret[iface]))
     f.close()
 
-def start_qmon(iface, interval_sec=0.001, outfile="q.txt"):
-    monitor = Process(target=monitor_qlen,
-                      args=(iface, interval_sec, outfile))
-    monitor.start()
-    return monitor
-
 def start_tcpprobe(outdir="test",outfile="cwnd.txt"):
     os.system("rmmod tcp_probe; modprobe tcp_probe port=5001 full=0;")
 
@@ -690,25 +773,27 @@ def start_tcpprobe(outdir="test",outfile="cwnd.txt"):
 def stop_tcpprobe():
     Popen("killall -9 cat", shell=True).wait()
 
-def FatTreeNet(args, bw=10, cpu=-1, queue=400, controller='DCController'):
-    droptail = {'max_queue_size': args.queue}
-    red = {'max_queue_size': args.queue,'enable_red':1,'enable_ecn': 0, \
+def FatTreeNet(args, bw=10, cpu=-1, queue=425, controller='DCController'):
+    droptail = {'bw':args.bw,'delay':str(args.delay)+'ms','max_queue_size': args.queue}
+    # 'delay':str(args.delay)+'ms',
+    red = {'bw':args.bw,'max_queue_size': args.queue,'enable_red':True,'enable_ecn': False, \
     'red_burst':55,'red_prob':0.01,'red_avpkt':1000,\
-         'red_min':30000, 'red_max':90000,'red_limit':400000}
-    red_ecn = {'max_queue_size': args.queue, 'enable_ecn': args.enable_ecn, \
-    'enable_red': args.enable_red,\
+         'red_min':33000, 'red_max':100000,'red_limit':1000000}
+    
+    red_ecn = {'bw':args.bw,'max_queue_size': args.queue, 'enable_ecn': True, \
+    'enable_red': False,\
             'red_min': args.redmin, 'red_max': args.redmax, 'red_burst': args.burst, \
-            'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 400000}
+            'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 1000000}
 
     info('*** Creating the topology')
     # ,delay=str(args.delay)+'ms',
     topo = FatTreeTopo(args.K)
     host = custom(CPULimitedHost, cpu=cpu)
     if args.mdtcp==1 or args.dctcp==1:
-        link = custom(TCLink, bw=args.bw,delay=str(args.delay)+'ms',**red_ecn)
+        link = custom(TCLink, **red_ecn)
     else:
-        link = custom(TCLink, bw=args.bw,delay=str(args.delay)+'ms',**red)
-    net = Mininet(topo, host=host, link=link, switch=OVSKernelSwitch,
+        link = custom(TCLink, **red)
+    net = Mininet(topo, host=TestHost, link=link, switch=OVSKernelSwitch,
             controller=RemoteController, autoStaticArp=True)
 
     return net
@@ -757,7 +842,7 @@ def cprint(s, color, cr=True):
         print T.colored(s, color),
 
 def enableMPTCP(subflows):
-    os.system("sudo sysctl -w net.ipv4.tcp_ecn=0")
+    os.system("sudo sysctl -w net.ipv4.tcp_ecn=1")
     os.system("sudo sysctl -w net.mptcp.mptcp_enabled=1")
     os.system("sudo sysctl -w net.mptcp.mptcp_debug=0")
     os.system("sudo sysctl -w net.mptcp.mptcp_path_manager=ndiffports")
@@ -766,7 +851,7 @@ def enableMPTCP(subflows):
     os.system("sudo sysctl -w net.ipv4.tcp_congestion_control=olia")
 
 def enableTCP():
-    os.system("sudo sysctl -w net.ipv4.tcp_ecn=0")
+    os.system("sudo sysctl -w net.ipv4.tcp_ecn=1")
     os.system("sudo sysctl -w net.mptcp.mptcp_enabled=0")
     os.system("sudo sysctl -w net.ipv4.tcp_congestion_control=reno")
 
@@ -803,34 +888,24 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
                 node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
-                node.cmd(str.format('tc qdisc del dev {} root',port))
-                node.cmd(str.format('ip link set txqueuelen 400 dev {}',port))
-                node.cmd(str.format('tc qdisc add dev {} root handle 1: htb default 1', port))
-                node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+                # node.cmd(str.format('tc qdisc del dev {} root',port))
+                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
+                #sudo tc qdisc replace dev eth6 root handle 1: netem rate 100mbit    
+                # node.cmd(str.format('tc qdisc replace dev {} root handle 1: netem rate {}Mbit', port,args.bw))
+                #node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+                # if args.mdtcp==1 or args.dctcp==1:
+                #     # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                #     node.cmd(str.format('tc qdisc replace dev {} root handle 1: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #           ecn bandwidth {} probability 0.99 ', port,args.redmin,args.redmax,args.burst,args.bw))
 
-                if args.mdtcp==1 or args.dctcp==1:
-                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
-                         bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
-                    
-                     # node.cmd(str.format('tc qdisc add dev {} root handle 1: netem rate {}Mbit delay {}ms drop 1.0 ecn', port,args.bw,args.delay))
-                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
-                     #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,args.bw, args.prob))
-                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min {} max {} avpkt 1000 burst {} \
-                     #     bandwidth {} probability {} ecn', port,args.redmin,args.redmax,args.burst,10*args.bw, args.prob))
-                     # node.cmd(str.format('tc class add dev {} parent 1:1 handle 5: htb rate {}Mbit ', port,args.bw))
-                    
-                     
-                else:
-                     
-                    node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
-                         bandwidth {} probability 0.01',port,args.bw))
-                     # # node.cmd(str.format('tc class add dev {} parent 1:1 handle 5: htb rate {}Mbit ', port,args.bw))                  
-                     # node.cmd(str.format('tc qdisc add dev {} parent 1:1 handle 10: red limit 400000 min 30000 max 90000 avpkt 1000 burst 55 \
-                     #     bandwidth {} probability 0.01',port,args.bw))
-                
-                node.cmd(str.format('tc qdisc add dev {} parent 10:1 handle 20: netem delay {}ms limit {}', port,args.delay,args.queue))
-                    
+                                     
+                # else:
+                #     node.cmd(str.format('tc qdisc replace dev {} root handle 1: red limit 200000 min 33000 max 100000 avpkt 1000 burst 55 ecn \
+                #          bandwidth {} probability 0.01',port,args.bw))
 
+                    
+                # node.cmd(str.format('tc qdisc replace dev {} parent 1:1 handle 10: netem rate {}Mbit', port,args.bw))
+                    
     # disable offloading and configure qdisc on switch interfaces
     nodes = net.hosts
     # nodes = net.switches
@@ -841,26 +916,27 @@ def ConfigureOffloadingAndQdisc(args,net):
         for port in node.ports:
             if str.format('{}', port) != 'lo':
                 node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
-                node.cmd(str.format('tc qdisc del dev {} root',port))
-                # node.cmd(str.format('tc qdisc add dev {} root handle 1: netem delay {}ms rate {}Mbit', port,args.delay,args.bw))
-                node.cmd(str.format('tc qdisc add dev {} root handle 5:0 htb default 1', port))
-                node.cmd(str.format('tc class add dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
-                node.cmd(str.format('tc qdisc add dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
-                # node_route = node.cmd("ip route show")
-                # node_route=node_route.rstrip()
-                # node.popen('ip route replace %s %s %s' % (node_route, 'rto_min','10ms')).wait()
-                # node.popen('ip route flush cache').wait()
-                # # node.cmd('sysctl -w net.ipv4.tcp_no_metrics_save=1')
-                # node.cmd('sysctl -w net.ipv4.route.flush=1')                
-                #node.cmdPrint('tc -s -d qdisc show dev %s'%port)
-                # node.cmdPrint('ip route')
+                # node.cmd(str.format('tc qdisc del dev {} root',port))
+                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
+                # node.cmd(str.format('tc qdisc replace dev {} root netem delay {}ms rate {}Mbit', port,args.delay,args.bw))
+                node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
+                node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
+                
 
     return net
 
+def allKiller():
+    # kill all processes
+    os.system('killall -9 iperf ping iperf3 netperf \
+     netserver server simple-client tcpdump fcttest client tg' )
+            
 def FatTreeTest(args,controller):
 
     net = FatTreeNet(args, cpu=args.cpu, bw=BW, queue=QUEUE_SIZE,
             controller=controller)
+
+    # TestHost
     #pods = range(0, args.K)
     #edge_sw = range(0, args.K/2)
     #agg_sw = range(args.K/2, args.K)
@@ -871,63 +947,97 @@ def FatTreeTest(args,controller):
     
     net=ConfigureOffloadingAndQdisc(args,net)
 
-    '''
-    uncomment and implement the following fucntion if flow tables are installed proactively, 
-    in this mode, the mininet can work without a controller
-    '''
-    # install_proactive(net, topo)
-    # wait for the switches to connect to the controller
     print('Waiting for switches to connect to the controller')
     sleep(5)
 
-    workload = get_workload(net)
+    if args.test == 1:
+    
+        for h in net.hosts:
+            # h.startServer()
+            h.startEmpServer()
 
-    # disableMDTCP()
-    # enableDCTCP()
+        sleep(2)
 
-    if args.test==0:
-        get_max_throughput(net, args.output_dir)
+        for nflows in [args.subflows]:
+            cwd = os.path.join(args.output_dir, "flows%d" % (nflows))
 
-    for nflows in [args.subflows]:
-        cwd = os.path.join(args.output_dir, "flows%d" % (nflows))
+            if not os.path.exists(cwd):
+                    os.makedirs(cwd) 
 
-        # Popen("echo > /dev/null | sudo tee /var/log/syslog",shell=True).wait()
-        # Popen("echo > /dev/null | sudo tee /var/log/kern.log",shell=True).wait()
-        Popen("rm conf/client_* ",shell=True).wait()
-        Popen("rm *reqs.out flows_10.* log_10.*  ",shell=True).wait()
-
-        if not os.path.exists(cwd):
-            os.makedirs(cwd)
-
-        if args.mdtcp:
-            if nflows==1:
+            if args.mdtcp:
+                if nflows==1:
+                    enableDCTCP()
+                else:
+                    enableMDTCP(nflows)
+            elif args.dctcp:
                 enableDCTCP()
             else:
-                enableMDTCP(nflows)
-        elif args.dctcp:
-            enableDCTCP()
-        else:
-            if nflows == 1:
-                enableTCP()
+                if nflows == 1:
+                    enableTCP()
+                else:
+                    enableMPTCP(nflows)
+            cprint("Starting experiment for workload %s with %i subflows" % (
+                args.workload, nflows), "green")
+
+            for h in net.hosts:
+                h.startClient(net.hosts,cwd)
+
+
+            if args.qmon==1:
+                queue_mons=monitor_queue(net,cwd)
+
+            # sleep(random.uniform(0.1,0.3))
+
+            sleep(getRunTime())
+            if args.qmon==1:
+                for qmon in queue_mons:
+                    qmon.terminate()
+            sleep(60)
+            for h in net.hosts:
+                h.stopAll() 
+    else:
+
+        workload = get_workload(net)
+
+        # disableMDTCP()
+        # enableDCTCP()
+
+        if args.test==0:
+            get_max_throughput(net, args.output_dir)
+
+        for nflows in [args.subflows]:
+            cwd = os.path.join(args.output_dir, "flows%d" % (nflows))
+
+            # Popen("echo > /dev/null | sudo tee /var/log/syslog",shell=True).wait()
+            # Popen("echo > /dev/null | sudo tee /var/log/kern.log",shell=True).wait()
+            Popen("rm conf/client_* ",shell=True).wait()
+            Popen("rm *reqs.out flows_10.* log_10.*  ",shell=True).wait()
+
+            if not os.path.exists(cwd):
+                os.makedirs(cwd)
+
+            if args.mdtcp:
+                if nflows==1:
+                    enableDCTCP()
+                else:
+                    enableMDTCP(nflows)
+            elif args.dctcp:
+                enableDCTCP()
             else:
-                enableMPTCP(nflows)
-        cprint("Starting experiment for workload %s with %i subflows" % (
-            args.workload, nflows), "green")
+                if nflows == 1:
+                    enableTCP()
+                else:
+                    enableMPTCP(nflows)
+            cprint("Starting experiment for workload %s with %i subflows" % (
+                args.workload, nflows), "green")
 
-        workload.run(cwd,nflows)
+            workload.run(cwd,nflows)
+            allKiller()
+            sleep(5)
 
-        # Shut down iperf processes
-        os.system('killall -9 iperf ping iperf3 netperf netserver server \
-            simple-client tcpdump fcttest client tg' )
-        Popen("rm *reqs.out ",shell=True).wait()
-
-        Popen("mv flows_10.*  %s"%cwd,shell=True).wait()
-        Popen("mv log_10.*  %s"%cwd,shell=True).wait()
-        Popen("mv server-10*  %s"%cwd,shell=True).wait()
-        # os.system('killall  python pox/pox.py DCController --topo=ft,4 --routing=ECMP')
-        sleep(5)
-
-    # disableMDTCP() 
+        disableMDTCP()
+        
+    
     net.stop()
 
 

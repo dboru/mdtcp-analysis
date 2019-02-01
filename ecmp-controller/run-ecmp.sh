@@ -3,10 +3,10 @@ mn -c
 
 cdate=$(date +"%Y%m%d")
 
-DURATION=30
+DURATION=60
 iperf="iperf"
 mdtcp_debug=0
-queue_size=400
+queue_size=200
 
 # test=0 throughput test, test=1 FCT
 qmon=1
@@ -14,7 +14,7 @@ bwm=0
 tcpdump=0
 tcpprobe=0
 
-num_reqs=2000
+num_reqs=1000
 
 cdir=$(pwd)
 echo $cdir
@@ -37,7 +37,7 @@ sleep 1
 # proto 0=mptcp, proto=1=mdtcp
 m=1
 bw=100
-delay=0.1
+delay=1
 
 seed=754
 
@@ -45,12 +45,12 @@ while [ $m -le 1 ] ;
 do
   seed=$(( seed + m )) 
 
-  for mytest in 1 ;
+  for mytest in 0 ;
   do 
-    for WORKLOAD in 'one_to_several';
+    for WORKLOAD in 'one_to_one';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 0.2 0.5 ; 
+    for load in 1.0; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
@@ -73,7 +73,7 @@ do
       do 
         for proto in 1 0 ;
         do 
-          for subflows in 1 2 3 4; 
+          for subflows in 1 2 3 4 5 6 7 8; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
@@ -94,7 +94,7 @@ do
               redmax=30001
               redmin=30000
               redburst=31
-            	redprob=1
+            	redprob=1.0
             	enable_ecn=1
             	enable_red=0
             	mdtcp=1
@@ -113,8 +113,8 @@ do
                 then
                   enable_ecn=0
                 	enable_red=1
-                  redmax=90000
-                  redmin=30000
+                  redmax=100000
+                  redmin=33000
                   redburst=55
                   redprob=0.01
                 	mdtcp=0
@@ -160,7 +160,7 @@ do
                     for f in $subflows
                     do
                       python src/process/plot_queue_monitor.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw -m $queue_size -o plots/$subdir-$WORKLOAD-flows$f
-                      python src/process/plot_queue_delay.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw  -m $queue_size  -o plots/$subdir-$WORKLOAD-flows$f
+                      #python src/process/plot_queue_delay.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw  -m $queue_size  -o plots/$subdir-$WORKLOAD-flows$f
 
                     done
                   fi

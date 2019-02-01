@@ -15,9 +15,9 @@ int    flow_total_time           = 0; /* total time to generate requests (in sec
 //int    load                      = 100; /* average network load in Mbps per host */
 int    incast                    = 0; /* all-to-one when set to 1 */
 struct cdf_table *flow_size_dist = NULL; /* flow distribution table*/
-char   flow_cdf_file[100]        = "cdf/dctcp.cdf"; /* flow size distribution file */
-int    header_size               = 86; //54(TCP_hdr+IPv4_hdr+Ethernet) 86(MPTCP header,max_packet size 1428, TCP 1448) 
-int    max_ether_size            = 1514;//1500
+char   flow_cdf_file[100]        = "cdf/data_mining.cdf"; /* flow size distribution file */
+int    header_size               = 54; //54(TCP_hdr+IPv4_hdr+Ethernet) 86(MPTCP header,max_packet size 1428, TCP 1448) 
+int    max_ether_size            = 1500;//1500
 
 /* IP address configuration */
 const char * const host_ip[] = {
@@ -86,19 +86,13 @@ int main(int argc, char **argv)
 	double period_us;
 	double load=100.0;/*load */
 
+	int req_per_sec=0;
+
+	int num_sch=0;
+	double time_ref=0.0;
+
 	int seed=754;
-	float elephant_time[16];
-	// int  flows[16];
 
-	double flows_time[16];
-
-	int i=0;
-
-	for (i=0;i<16;i++){
-		elephant_time[i]=0.0;
-		// flows[i]=0;
-		flows_time[i]=0.0;
-	}
 
 	if (argc > 3) {
 		load=atof(argv[1]);
@@ -115,25 +109,19 @@ int main(int argc, char **argv)
 	// header_size=20B(IPv4)+20B(TCP+checksum)+14B(Ethernet)+4B(FCS)+12B(InterframeGap)+8B(Preamble)=78B
 
 	/* Average request arrival interval (in microsecond) */
-        double mean_flowsize = avg_cdf(flow_size_dist);      
-	period_us = 8.0*(mean_flowsize+(mean_flowsize*header_size/max_payload_size))/(host_num*load); 
-        printf("meanflowsize %f period_us %f\n", mean_flowsize,period_us);
+    double mean_flowsize = avg_cdf(flow_size_dist); 
+
+    req_per_sec=((1000000*host_num*load)/(8*mean_flowsize+(8*mean_flowsize*header_size/max_payload_size)));
+
+    period_us = 8.0*(mean_flowsize+(mean_flowsize*header_size/max_payload_size))/(host_num*load); 
+        
 
 	// period_us = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(host_num*load*max_payload_size); 
 	//per server period
 	float period_sec = (8*avg_cdf(flow_size_dist)*max_ether_size)/(load*max_payload_size*1000000.0); 
+     
+    printf("req_per_sec  %d \n", req_per_sec);
 
-
-
-	/*
-	   printf("host_num        %d \n", host_num);
-	   printf("flow_total_num  %d \n", flow_total_num);
-	   printf("flow_total_time %d \n", flow_total_time);
-	   printf("load            %d \n", load);
-	   printf("avg_flowsize    %f \n", avg_cdf(flow_size_dist));
-	   printf("period_us       %f \n", period_us);
-	 */	   
-	//printf("period_us       %f \n", period_us);
 	/* Convert flow_total_time to flow_total_num */
 	if (flow_total_num == 0 && flow_total_time > 0)
 		flow_total_num = flow_total_time * 1000000 / period_us;
@@ -151,30 +139,23 @@ int main(int argc, char **argv)
 		while (src_host == dst_host)
 			dst_host = rand() % host_num;
 
-
 		/* Assign flow size and start time */
 		flow_start_time = flow_start_time + poission_gen_interval(1.0 / period_us) / 1000000;
 
 		flow_size = gen_random_cdf(flow_size_dist);
 
-		/*schedule one elephant flow per 50ms for a server (median value of large flows=1 from DCTCP paper)*/
+		if (num_sch < req_per_sec){
+			num_sch=num_sch+1;
+		}
 
-		if (flow_size > 1000000 && elephant_time[dst_host] > 0 && (flow_start_time-elephant_time[dst_host]<0.05))
-			continue;
-		else if (flow_size > 1000000)
-			elephant_time[dst_host]=flow_start_time;
+		else if (num_sch>=req_per_sec)
+		{
+			num_sch=1;
 
-		//int num_pkts=(flows[dst_host]+flow_size)/max_ether_size;
-
-
-
-		/*don't overload the server*/ 
-		//float period_sec=period_us/1000000.0;
-
-		//if ( (flow_start_time-flows_time[dst_host])<period_sec)
-		//	continue;
-		//flows_time[dst_host]=flow_start_time;
-
+			if ((flow_start_time-time_ref)<1)
+			  flow_start_time=1.0+time_ref+(((float)rand()/(float)(RAND_MAX)) * 0.5);
+			time_ref=flow_start_time;
+		}
 
 		/* Incast: only accept dst_host = 0 */
 		if (incast && dst_host != 0) {

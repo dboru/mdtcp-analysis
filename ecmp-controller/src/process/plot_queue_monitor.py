@@ -129,15 +129,15 @@ def main():
 
         for line in open(f).xreadlines():
           aline=(line.split(','))
-          if len(aline)==2 and (int(aline[1])/1000.0) <=args.maxq:
+          if len(aline)==2 :
             if first_entry==0:
               queue[layer]['time'].append(float(aline[0]))
-              queue[layer]['queue'].append((int(aline[1])/1500))
+              queue[layer]['queue'].append((int(aline[1])))
               first_entry=1
             else:
               diff_time=float(aline[0])-queue[layer]['time'][0]
               queue[layer]['time'].append(diff_time)
-              queue[layer]['queue'].append((int(aline[1])/1500))
+              queue[layer]['queue'].append((int(aline[1])))
 
 
   if queue:

@@ -100,9 +100,9 @@ unsigned int write_exact(int fd, char *buf, size_t count, size_t max_per_write,
         cur_buf = (dummy_buf) ? buf : (buf + bytes_total_write);
         gettimeofday(&tv_start, NULL);
         n = write(fd, cur_buf, bytes_to_write);
-        //gettimeofday(&tv_end, NULL);
-        //write_us = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 + tv_end.tv_usec - tv_start.tv_usec;
-        //sleep_us += (rate_mbps) ? n * 8 / rate_mbps - write_us : 0;
+        gettimeofday(&tv_end, NULL);
+        write_us = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 + tv_end.tv_usec - tv_start.tv_usec;
+        sleep_us += (rate_mbps) ? n * 8 / rate_mbps - write_us : 0;
 
         if (n <= 0)
         {
@@ -114,11 +114,11 @@ unsigned int write_exact(int fd, char *buf, size_t count, size_t max_per_write,
         {
             bytes_total_write += n;
             count -= n;
-           /* if (sleep_overhead_us < sleep_us)
+            if (sleep_overhead_us < sleep_us)
             {
                 usleep(sleep_us - sleep_overhead_us);
                 sleep_us = 0;
-            }*/
+            }
         }
     }
 
@@ -246,8 +246,8 @@ unsigned int get_usleep_overhead(int iter_num)
         return 0;
 
     gettimeofday(&tv_start, NULL);
-    //for(i = 0; i < iter_num; i ++)
-      //  usleep(0);
+    for(i = 0; i < iter_num; i ++)
+        usleep(0);
     gettimeofday(&tv_end, NULL);
     tot_sleep_us = (tv_end.tv_sec - tv_start.tv_sec) * 1000000 + tv_end.tv_usec - tv_start.tv_usec;
 

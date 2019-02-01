@@ -36,24 +36,12 @@ def parse_file(file_name,results,subflow):
         # Size:34075, Duration(usec):9098403
         
         '''Size:flowsize, Duration(usec):fct'''
-        if len(arr) == 9:
+        if len(arr) == 4 and 'Size' in line:
             '''[size, fct]'''
-
-            size=int(arr[7])
-            # in ms 
-            fct_ms=float(arr[6].split('-')[1])*1000.0;
-            if  size < 100*1024:
-                results[subflow]['small']['size'].append(size)
-                results[subflow]['small']['fct'].append(fct_ms)
-            elif size>=100*1024 and size <10 * 1024 * 1024:
-                results[subflow]['medium']['size'].append(size)
-                results[subflow]['medium']['fct'].append(fct_ms)
-            elif size>=10 * 1024 * 1024:
-                results[subflow]['large']['size'].append(size)
-                results[subflow]['large']['fct'].append(fct_ms)
-
-            # size=int(arr[0].split(':')[1])
-            # fct_ms=float(arr[1].split(':')[1])/1000.0;
+            # FCT using Iperf Transfer
+            # size=int(arr[7])
+            # # in ms 
+            # fct_ms=float(arr[6].split('-')[1])*1000.0;
             # if  size < 100*1024:
             #     results[subflow]['small']['size'].append(size)
             #     results[subflow]['small']['fct'].append(fct_ms)
@@ -63,6 +51,20 @@ def parse_file(file_name,results,subflow):
             # elif size>=10 * 1024 * 1024:
             #     results[subflow]['large']['size'].append(size)
             #     results[subflow]['large']['fct'].append(fct_ms)
+
+            # FCT from Client-Server Application
+
+            size=int(arr[0].split(':')[1])
+            fct_ms=float(arr[1].split(':')[1])/1000.0;
+            if  size < 100*1024:
+                results[subflow]['small']['size'].append(size)
+                results[subflow]['small']['fct'].append(fct_ms)
+            elif size>=100*1024 and size <10 * 1024 * 1024:
+                results[subflow]['medium']['size'].append(size)
+                results[subflow]['medium']['fct'].append(fct_ms)
+            elif size>=10 * 1024 * 1024:
+                results[subflow]['large']['size'].append(size)
+                results[subflow]['large']['fct'].append(fct_ms)
 
             results[subflow]['all']['size'].append(size)
             results[subflow]['all']['fct'].append(fct_ms)
