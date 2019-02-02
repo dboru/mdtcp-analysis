@@ -990,14 +990,14 @@ def FatTreeTest(args,controller):
 
             # sleep(random.uniform(0.1,0.3))
 
-            sleep(getRunTime()+60)
+            sleep(getRunTime())
             if args.tcpprobe:
                 stop_tcpprobe()
             if args.qmon==1:
                 for qmon in queue_mons:
                     qmon.terminate()
 
-            sleep(100)
+            sleep(300)
             allKiller()
 
             for h in net.hosts:
