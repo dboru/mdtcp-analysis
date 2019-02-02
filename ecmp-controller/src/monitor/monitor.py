@@ -7,12 +7,13 @@ default_dir = '.'
 
 def monitor_qlen(iface, interval_sec = 0.01, fname='%s/qlen.txt' % default_dir):
     pat_queued = re.compile(r'backlog\s[^\s]+\s([\d]+)p')
-    #pat_queued = re.compile(r'backlog\s([\d]+)b')
+    pat_queued = re.compile(r'backlog\s([\d]+)b')
     cmd = "tc -s qdisc show dev %s" % (iface)
+    # cmd = "tc -s qdisc show dev %s | grep backlog" % (iface)
     ret = []
     open(fname, 'w').write('')
 
-    #     qdisc htb 1: root refcnt 2 r2q 10 default 1 direct_packets_stat 0 direct_qlen 400
+    # qdisc htb 1: root refcnt 2 r2q 10 default 1 direct_packets_stat 0 direct_qlen 400
     #  Sent 450 bytes 5 pkt (dropped 0, overlimits 6 requeues 0) 
     #  backlog 0b 0p requeues 0 
     # qdisc red 10: parent 1:1 limit 400000b min 30000b max 90000b 
@@ -26,37 +27,34 @@ def monitor_qlen(iface, interval_sec = 0.01, fname='%s/qlen.txt' % default_dir):
     while 1:
         p = Popen(cmd, shell=True, stdout=PIPE)
         output = p.stdout.read()
-
-        # output=output.split('\n')
-        # matches the root qdisc backlog (for netem matches[0])
         matches = pat_queued.findall(output)
-        # print(matches,output)
-        if matches and len(matches) > 1:
-        #     ret.append(matches[1])
-             t = "%f" % time()
-             open(fname, 'a').write(t + ',' + matches[1] + '\n')
+        
+        if len(matches)>1:
+            t = "%f" % time()
+            # print(matches)
+            qbytes=matches[1]
+            if 'K' in qbytes:
+                qbytes=1024*int(qbytes.strip('K'))
+                open(fname, 'a').write(t + ',' + str(qbytes) + '\n')
+            elif 'M' in qbytes:
+                qbytes=1024*1024*int(qbytes.strip('M'))
+                open(fname, 'a').write(t + ',' + str(qbytes) + '\n')
+            elif 'G' in qbytes:
+                qbytes=1024*1024*1024*int(qbytes.strip('G'))
+                open(fname, 'a').write(t + ',' + str(qbytes) + '\n')
+            else:
+                open(fname, 'a').write(t + ',' + qbytes + '\n')
+
+
+        # matches = pat_queued.findall(output)
+        # # print(matches,output)
+        # if matches and len(matches) > 1:
+        # #     ret.append(matches[1])
+        #      t = "%f" % time()
+        #      open(fname, 'a').write(t + ',' + matches[1] + '\n')
+
         sleep(interval_sec)
 
-        # monitor bytes
-        #red=0
-        #for line in output:
-        #    if 'red' in line:
-        #        red=1
-        #    if red==1 and 'backlog' in line:
-        #        red=0
-                # ['backlog', '0b', '0p', 'requeues', '0']
-        #        backlog_bytes=line.split()[1].strip('b')
-        #        if 'K' in backlog_bytes:
-        #            backlog_bytes=str(1024*int(backlog_bytes.strip('K')))
-        #        elif 'M' in backlog_bytes:
-        #            backlog_bytes=str(1024*1024*int(backlog_bytes.strip('M')))
-        #        elif 'G' in backlog_bytes:
-        #            backlog_bytes=str(1024*1024*1024*int(backlog_bytes.strip('G')))
-                # 9K
-        #        t = "%f" % time()
-        #        open(fname, 'a').write(t + ',' + backlog_bytes + '\n')
-        #        break
-   
     return
 
 def monitor_count(ipt_args="--src 10.0.0.0/8",

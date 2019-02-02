@@ -85,7 +85,7 @@ def plot_queue_stats(queue):
       # edge.append(queue[a])
 
   axplot.set_title('Core')
-  axplot.set_ylabel('Queue [Pkts]')
+  axplot.set_ylabel('Queue [Kbytes]')
   axplot.set_xticklabels([])
   # axplot.set_xlim(5,30)
   # axplot.set_ylim(0,max_q+5)
@@ -100,7 +100,7 @@ def plot_queue_stats(queue):
   axplot.grid(True)
 
   axplot2.set_title('Edge')
-  axplot2.set_ylabel('Queue [Pkts]')
+  axplot2.set_ylabel('Queue [Kbytes]')
   axplot2.set_xlabel('Time [secs]')
   # axplot2.set_xlim(5,30)
   # axplot2.set_ylim(0,max_q+5)
@@ -129,15 +129,15 @@ def main():
 
         for line in open(f).xreadlines():
           aline=(line.split(','))
-          if len(aline)==2 :
+          if len(aline)==2 and int(aline[1]) <= (1024*args.maxq):
             if first_entry==0:
               queue[layer]['time'].append(float(aline[0]))
-              queue[layer]['queue'].append((int(aline[1])))
+              queue[layer]['queue'].append((int(aline[1])/1000.0))
               first_entry=1
             else:
               diff_time=float(aline[0])-queue[layer]['time'][0]
               queue[layer]['time'].append(diff_time)
-              queue[layer]['queue'].append((int(aline[1])))
+              queue[layer]['queue'].append((int(aline[1])/1000.0))
 
 
   if queue:
