@@ -888,20 +888,20 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
                 node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
-                # node.cmd(str.format('tc qdisc del dev {} root',port))
-                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
+                node.cmd(str.format('tc qdisc del dev {} root',port))
+                node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
                 #sudo tc qdisc replace dev eth6 root handle 1: netem rate 100mbit    
-                # node.cmd(str.format('tc qdisc replace dev {} root handle 1: netem rate {}Mbit', port,args.bw))
-                #node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                # if args.mdtcp==1 or args.dctcp==1:
-                #     # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
-                #     node.cmd(str.format('tc qdisc replace dev {} root handle 1: red limit 200000 min {} max {} avpkt 1000 burst {} \
-                #           ecn bandwidth {} probability 0.99 ', port,args.redmin,args.redmax,args.burst,args.bw))
+                node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
 
-                                     
-                # else:
-                #     node.cmd(str.format('tc qdisc replace dev {} root handle 1: red limit 200000 min 33000 max 100000 avpkt 1000 burst 55 ecn \
-                #          bandwidth {} probability 0.01',port,args.bw))
+                #node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
+                if args.mdtcp==1 or args.dctcp==1:
+                    # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                    node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                          ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))                    
+                else:
+                    node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min 33000 max 100000 avpkt 1000 burst 55 ecn \
+                         bandwidth {} probability 0.01',port,args.bw))
 
                     
                 # node.cmd(str.format('tc qdisc replace dev {} parent 1:1 handle 10: netem rate {}Mbit', port,args.bw))
@@ -991,7 +991,9 @@ def FatTreeTest(args,controller):
             if args.qmon==1:
                 for qmon in queue_mons:
                     qmon.terminate()
-            sleep(60)
+            sleep(300)
+            allKiller()
+
             for h in net.hosts:
                 h.stopAll() 
     else:
