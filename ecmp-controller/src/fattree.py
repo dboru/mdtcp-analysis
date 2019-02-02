@@ -950,12 +950,6 @@ def FatTreeTest(args,controller):
     sleep(5)
 
     if args.test == 1:
-    
-        for h in net.hosts:
-            # h.startServer()
-            h.startEmpServer()
-
-        sleep(2)
 
         for nflows in [args.subflows]:
             cwd = os.path.join(args.output_dir, "flows%d" % (nflows))
@@ -978,20 +972,32 @@ def FatTreeTest(args,controller):
             cprint("Starting experiment for workload %s with %i subflows" % (
                 args.workload, nflows), "green")
 
+            sleep(2)
+
+            for h in net.hosts:
+                h.startEmpServer()
+
+            sleep(2)
+
             for h in net.hosts:
                 h.startClient(net.hosts,cwd)
 
 
             if args.qmon==1:
                 queue_mons=monitor_queue(net,cwd)
+            if args.tcpprobe and args.iter==1:
+                start_tcpprobe(cwd,"cwnd.txt")
 
             # sleep(random.uniform(0.1,0.3))
 
-            sleep(getRunTime())
+            sleep(getRunTime()+60)
+            if args.tcpprobe:
+                stop_tcpprobe()
             if args.qmon==1:
                 for qmon in queue_mons:
                     qmon.terminate()
-            sleep(300)
+
+            sleep(100)
             allKiller()
 
             for h in net.hosts:

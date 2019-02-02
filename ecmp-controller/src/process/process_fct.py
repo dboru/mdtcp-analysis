@@ -26,17 +26,18 @@ def parse_file(file_name,results,subflow):
     size_transfer=0
     while True:
         line = f.readline().rstrip()
-        # print(line,f)
+        #print(line)
 
         if not line:
             break
         arr = line.split(',')
+       
 
         # 20190126174247.123,10.0.0.3,45608,10.3.0.3,5001,3,0.0-0.2,122277,4194031 (iperf2.0.12)
         # Size:34075, Duration(usec):9098403
         
         '''Size:flowsize, Duration(usec):fct'''
-        if len(arr) == 4 and 'Size' in line:
+        if len(arr) == 6 and 'Size' in line:
             '''[size, fct]'''
             # FCT using Iperf Transfer
             # size=int(arr[7])
@@ -53,6 +54,7 @@ def parse_file(file_name,results,subflow):
             #     results[subflow]['large']['fct'].append(fct_ms)
 
             # FCT from Client-Server Application
+            #print(arr)
 
             size=int(arr[0].split(':')[1])
             fct_ms=float(arr[1].split(':')[1])/1000.0;
