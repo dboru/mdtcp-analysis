@@ -242,6 +242,7 @@ class ClientThread(threading.Thread):
         self.me = me
         self.done = False
         self.prog= None
+        self.bulk=None
         self.out_dir=out_dir
         self.counter=0
         self.myload=myLoad(self.me.IP(),self.hosts)
@@ -252,17 +253,24 @@ class ClientThread(threading.Thread):
         while not self.done:
             if self.counter < self.nreqs:
                 dst,fs,tstart=self.myload[self.counter]
+
                 if self.counter==0:
+                    dstb=random.choice(self.hosts)
+                    if dstb !=self.me:
+                        self.bulk=self.me.popen(["/usr/local/bin/iperf", "-c",dstb.IP(),\
+                            "-p","6326","-b",str(args.bw*args.load)+"M","-t",str(int(getRunTime())+300)],stdout=open(os.devnull,"w"),\
+                            stderr=subprocess.STDOUT)
+                        self.bulk=None
                     sleep(tstart)
                 # self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-t",str(10),'-i',str(1),'-yC'],stdout=open(self.out_dir+"/flows_10.txt","a"),stderr=subprocess.STDOUT)
                 
-                # self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-b",\
-                #     str(args.bw)+"M","-n",str(fs),"-l",str(fs),"-yC"],\
-                #     stdout=open(self.out_dir+'/flows_10',"a+"),stderr=subprocess.STDOUT)
+                self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-b",\
+                    str(args.bw)+"M","-n",str(fs),"-l",str(fs),"-yC"],\
+                    stdout=open(self.out_dir+'/flows_fct_client',"a+"),stderr=subprocess.STDOUT)
 
-                self.prog=self.me.popen(["./../hk-traffic-generator/bin/simple-client", "-s", \
-                    dst.IP(),"-p","5001","-n",str(fs),"-c","1"],\
-                    stdout=open(self.out_dir+'/flows_10',"a+"),stderr=subprocess.STDOUT)
+                # self.prog=self.me.popen(["./../hk-traffic-generator/bin/simple-client", "-s", \
+                #     dst.IP(),"-p","5001","-n",str(fs),"-c","1"],\
+                #     stdout=open(self.out_dir+'/flows_10',"a+"),stderr=subprocess.STDOUT)
                 
                 # self.prog.wait()
                 # Note: expovariate (small values e.g., 0.1,0.2 give large values)
@@ -270,11 +278,12 @@ class ClientThread(threading.Thread):
                 self.prog=None
                 if (self.counter+1)<(self.nreqs-1):
                     dst,fs,nextime=self.myload[self.counter+1]
-                    # print self.me.IP() + " reqs "+str(self.nreqs)+" count:"+str(self.counter)+" ntime "+str(nextime)
-                    sleep(nextime-tstart)
+                    # sleep(nextime-tstart)
+
+                    sleep(random.uniform(5,10))
+
                     self.counter+=1
-                    # print self.me.IP() + " reqs "+str(self.nreqs)+" count:"+str(self.counter)
-                   
+                    
                 else:
                     self.done=True
 
@@ -288,8 +297,13 @@ class TestHost(Host):
         Host.__init__(self,name,**kwargs)
         self.iperf_server=None
         self.client=None
+        self.bulk_server=None
+        self.bulk_client=None
     def startServer(self):
-        self.iperf_server=self.popen(["/usr/local/bin/iperf", "-s"],\
+        cwd = os.path.join(args.output_dir, "flows%d" % (args.subflows))
+        self.iperf_server=self.popen(["/usr/local/bin/iperf", "-s","-yC"],\
+            stdout=open(cwd+'/flows_10',"a+"),stderr=subprocess.STDOUT)
+        self.bulk_server = self.popen(["/usr/bin/iperf", "-s","-p","6326"],\
             stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
 
     def startEmpServer(self):
@@ -302,8 +316,15 @@ class TestHost(Host):
     def stopAll(self):
         if self.client is not None:
             self.client.stop()
+        if self.bulk_client is not None:
+            self.bulk_client.stop()
+
         if self.iperf_server is not None:
             self.iperf_server.terminate()
+
+        if self.bulk_server is not None:
+            self.bulk_server.terminate()
+        
 
 def median(l):
     "Compute median from an unsorted list of values"
@@ -975,7 +996,8 @@ def FatTreeTest(args,controller):
             sleep(2)
 
             for h in net.hosts:
-                h.startEmpServer()
+                h.startServer()
+                # h.startEmpServer()
 
             sleep(2)
 
@@ -990,14 +1012,16 @@ def FatTreeTest(args,controller):
 
             # sleep(random.uniform(0.1,0.3))
 
-            sleep(getRunTime())
+            sleep(getRunTime()+60)
             if args.tcpprobe:
                 stop_tcpprobe()
+            if args.tcpdump:
+                os.system('killall -9 tcpdump')
             if args.qmon==1:
                 for qmon in queue_mons:
                     qmon.terminate()
 
-            sleep(300)
+            sleep(240)
             allKiller()
 
             for h in net.hosts:
