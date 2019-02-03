@@ -255,14 +255,14 @@ class ClientThread(threading.Thread):
                 dst,fs,tstart=self.myload[self.counter]
 
                 if self.counter==0:
-                    dstb=random.choice(self.hosts)
-                    if dstb !=self.me:
-                        self.bulk=self.me.popen(["/usr/local/bin/iperf", "-c",dstb.IP(),\
-                            "-p","6326","-b",str(args.bw*args.load)+"M","-t",str(int(getRunTime())+300)],stdout=open(os.devnull,"w"),\
-                            stderr=subprocess.STDOUT)
-                        self.bulk=None
+                    #dstb=random.choice(self.hosts)
+                    #if dstb !=self.me:
+                    #    self.bulk=self.me.popen(["/usr/local/bin/iperf", "-c",dstb.IP(),\
+                     #       "-p","6326","-b",str(args.bw*args.load)+"M","-t",str(int(getRunTime())+100)],stdout=open(os.devnull,"w"),\
+                     #       stderr=subprocess.STDOUT)
+                      #  self.bulk=None
                     sleep(tstart)
-                # self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-t",str(10),'-i',str(1),'-yC'],stdout=open(self.out_dir+"/flows_10.txt","a"),stderr=subprocess.STDOUT)
+                #self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-t",str(10),'-i',str(1),'-yC'],stdout=open(self.out_dir+"/flows_10.txt","a"),stderr=subprocess.STDOUT)
                 
                 self.prog=self.me.popen(["/usr/local/bin/iperf", "-c",dst.IP(),"-b",\
                     str(args.bw)+"M","-n",str(fs),"-l",str(fs),"-yC"],\
@@ -278,9 +278,9 @@ class ClientThread(threading.Thread):
                 self.prog=None
                 if (self.counter+1)<(self.nreqs-1):
                     dst,fs,nextime=self.myload[self.counter+1]
-                    # sleep(nextime-tstart)
+                    sleep(nextime-tstart)
 
-                    sleep(random.uniform(5,10))
+                    #sleep(random.uniform(5,10))
 
                     self.counter+=1
                     
@@ -303,8 +303,8 @@ class TestHost(Host):
         cwd = os.path.join(args.output_dir, "flows%d" % (args.subflows))
         self.iperf_server=self.popen(["/usr/local/bin/iperf", "-s","-yC"],\
             stdout=open(cwd+'/flows_10',"a+"),stderr=subprocess.STDOUT)
-        self.bulk_server = self.popen(["/usr/bin/iperf", "-s","-p","6326"],\
-            stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
+        #self.bulk_server = self.popen(["/usr/bin/iperf", "-s","-p","6326"],\
+        #    stdout=open(os.devnull,"w"),stderr=subprocess.STDOUT)
 
     def startEmpServer(self):
         self.iperf_server=self.popen(["./../hk-traffic-generator/bin/server",\
@@ -388,7 +388,7 @@ def layer(name):
             
 def start_tcpdump(output_dir,iface):
     Popen("tcpdump -i %s -s 96 net 10.0.0.0/16 or net 10.1.0.0/16 or \
-        net 10.2.0.0/16 or net 10.3.0.0/16 -C 100 -w %s/trace-%s-%s.dmp \
+        net 10.2.0.0/16 or net 10.3.0.0/16 -C 20 -w %s/trace-%s-%s.dmp \
         -z gzip &"%(iface,output_dir,iface,datetime.datetime.now().strftime("%y%m%d-%H:%M:%S")), shell=True)
     
 def start_bwmng(output_dir):
@@ -420,7 +420,8 @@ def monitor_queue(net,output_dir):
                 start_tcpdump(output_dir,iface)
 
             qmons.append(start_qmon(iface,outfile="%s/queue_size_%s-%s_iter%s.txt"
-                                            % (output_dir, sw,iface,str(args.iter))))
+                                           % (output_dir, sw,iface,str(args.iter))))
+    #start_tcpdump(output_dir,'any') 
     return qmons
 
 class Workload():
@@ -997,7 +998,7 @@ def FatTreeTest(args,controller):
 
             for h in net.hosts:
                 h.startServer()
-                # h.startEmpServer()
+                #h.startEmpServer()
 
             sleep(2)
 
@@ -1022,8 +1023,8 @@ def FatTreeTest(args,controller):
                     qmon.terminate()
 
 
-            sleep(240)
-            os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
+            sleep(190)
+            #os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
             for h in net.hosts:
