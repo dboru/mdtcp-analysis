@@ -110,6 +110,8 @@ def plot_queue_stats(queue):
 def main():
 
   queue={}
+  first_time=0;
+
   for f in args.files:
     layer=None
     # queue_size_core-4_2_2-eth4_iter1.txt
@@ -130,14 +132,17 @@ def main():
         for line in open(f).xreadlines():
           aline=(line.split(','))
           if len(aline)==2 and int(aline[1]) <= (1024*args.maxq):
-            if first_entry==0:
-              queue[layer]['time'].append(float(aline[0]))
-              queue[layer]['queue'].append((int(aline[1])/1000.0))
-              first_entry=1
-            else:
-              diff_time=float(aline[0])-queue[layer]['time'][0]
-              queue[layer]['time'].append(diff_time)
-              queue[layer]['queue'].append((int(aline[1])/1000.0))
+            if first_time==0:
+              first_time=float(aline[0]);
+            elif float(aline[0]) - first_time > 5.0:
+              if first_entry==0:
+                queue[layer]['time'].append(float(aline[0]))
+                queue[layer]['queue'].append((int(aline[1])/1000.0))
+                first_entry=1
+              else:
+                diff_time=float(aline[0])-queue[layer]['time'][0]
+                queue[layer]['time'].append(diff_time)
+                queue[layer]['queue'].append((int(aline[1])/1000.0))
 
 
   if queue:

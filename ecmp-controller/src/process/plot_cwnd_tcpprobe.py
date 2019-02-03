@@ -60,15 +60,15 @@ def plot_cwnds():
         cwnds = parse_file(f)
 
         for cwnd in cwnds.keys():
-            if (len(cwnds[cwnd]['cwnd'])) > 100:
+            if (len(cwnds[cwnd]['cwnd'])) > 10:
                 fig = plt.figure()
                 axPlot = fig.add_subplot(111)
                 axPlot.plot(cwnds[cwnd]['time'],cwnds[cwnd]['cwnd'],marker='.')
                 axPlot.set_xlabel('Time [sec]')
                 axPlot.set_ylabel('CWND [pkts]')
                 axPlot.grid(True)
-                plt.savefig(args.out+cwnd+'.pdf')
-                # plt.show()
+                # plt.savefig(args.out+cwnd+'.pdf')
+                plt.show()
 
 
 plot_cwnds()

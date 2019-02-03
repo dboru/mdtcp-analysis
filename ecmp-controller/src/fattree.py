@@ -397,7 +397,7 @@ def start_bwmng(output_dir):
         Popen('bwm-ng -t 1000 -T rate -c 0  -o csv -C , -F \
             %s/rates_iter.txt &'%(output_dir), shell=True)
 
-def start_qmon(iface, interval_sec=0.1, outfile="q.txt"):
+def start_qmon(iface, interval_sec=0.01, outfile="q.txt"):
     monitor = Process(target=monitor_qlen,
                       args=(iface, interval_sec, outfile))
     monitor.start()
@@ -445,7 +445,7 @@ class Workload():
                     interfaces.append(intf.link.intf1.name)
                     interfaces.append(intf.link.intf2.name)
         sleep(2)
-        if args.qmon == 1 and args.iter==1:
+        if args.qmon == 1:
             print('started queue monitoring! ',subflows)
             qmons = []
             switch_names = [switch.name for switch in self.net.switches]
@@ -913,7 +913,7 @@ def ConfigureOffloadingAndQdisc(args,net):
                 node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
                 #sudo tc qdisc replace dev eth6 root handle 1: netem rate 100mbit    
                 node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
-                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
+                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1500', port,args.bw))
 
                 #node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
                 if args.mdtcp==1 or args.dctcp==1:
@@ -921,11 +921,11 @@ def ConfigureOffloadingAndQdisc(args,net):
                     node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min {} max {} avpkt 1000 burst {} \
                           ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))                    
                 else:
-                    node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min 33000 max 100000 avpkt 1000 burst 55 ecn \
-                         bandwidth {} probability 0.01',port,args.bw))
+                    node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min 33000 max 100000 avpkt 1000 burst 60 ecn \
+                         adaptive bandwidth {} ',port,args.bw))
 
                     
-                # node.cmd(str.format('tc qdisc replace dev {} parent 1:1 handle 10: netem rate {}Mbit', port,args.bw))
+                # node.cmd(str.format('tc qdisc replace dev {} parent 10:1 handle 20: netem delay {}ms', port,args.delay))
                     
     # disable offloading and configure qdisc on switch interfaces
     nodes = net.hosts
@@ -941,7 +941,7 @@ def ConfigureOffloadingAndQdisc(args,net):
                 # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
                 # node.cmd(str.format('tc qdisc replace dev {} root netem delay {}ms rate {}Mbit', port,args.delay,args.bw))
                 node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
-                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
+                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1500', port,args.bw))
                 node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
                 
     return net
@@ -1012,7 +1012,7 @@ def FatTreeTest(args,controller):
 
             # sleep(random.uniform(0.1,0.3))
 
-            sleep(getRunTime()+60)
+            sleep(getRunTime()+10)
             if args.tcpprobe:
                 stop_tcpprobe()
             if args.tcpdump:
@@ -1021,7 +1021,9 @@ def FatTreeTest(args,controller):
                 for qmon in queue_mons:
                     qmon.terminate()
 
+
             sleep(240)
+            os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
             for h in net.hosts:
@@ -1063,6 +1065,9 @@ def FatTreeTest(args,controller):
                 args.workload, nflows), "green")
 
             workload.run(cwd,nflows)
+
+            os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
+
             allKiller()
             sleep(5)
 

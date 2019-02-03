@@ -37,11 +37,11 @@ sleep 1
 # proto 0=mptcp, proto=1=mdtcp
 m=1
 bw=100
-delay=1
+delay=0.5
 
 seed=754
 
-while [ $m -le 1 ] ; 
+while [ $m -le 15 ] ; 
 do
   seed=$(( seed + m )) 
 
@@ -91,9 +91,9 @@ do
             # cdate=$(date +"%Y%m%d")
             if [ $proto -eq 1 ] ;
             then 
-              redmax=30001
-              redmin=30000
-              redburst=31
+              redmax=40001
+              redmin=40000
+              redburst=41
             	redprob=1.0
             	enable_ecn=1
             	enable_red=0
@@ -111,11 +111,11 @@ do
                 fi
               elif [ $proto -eq 0 ]; 
                 then
-                  enable_ecn=0
-                	enable_red=1
+                  enable_ecn=1
+                	enable_red=0
                   redmax=100000
-                  redmin=33000
-                  redburst=55
+                  redmin=40000
+                  redburst=60
                   redprob=0.01
                 	mdtcp=0
                 	dctcp=0
@@ -159,8 +159,8 @@ do
                   then
                     for f in $subflows
                     do
-                      python src/process/plot_queue_monitor.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw -m $queue_size -o plots/$subdir-$WORKLOAD-flows$f
-                      #python src/process/plot_queue_delay.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw  -m $queue_size  -o plots/$subdir-$WORKLOAD-flows$f
+                      python src/process/plot_queue_cdf.py -f results/$subdir/$WORKLOAD/flows$f/queue_size* -b $bw -m $queue_size -o plots/$subdir-$WORKLOAD-flows$f
+                      python src/process/plot_ping.py -f results/$subdir/$WORKLOAD/flows$f/ping* -b $bw  -o plots/$subdir-$WORKLOAD-flows$f
 
                     done
                   fi

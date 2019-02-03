@@ -114,11 +114,11 @@ unsigned int write_exact(int fd, char *buf, size_t count, size_t max_per_write,
         {
             bytes_total_write += n;
             count -= n;
-            if (sleep_overhead_us < sleep_us)
-            {
-                usleep(sleep_us - sleep_overhead_us);
-                sleep_us = 0;
-            }
+            // if (sleep_overhead_us < sleep_us)
+            // {
+            //     usleep(sleep_us - sleep_overhead_us);
+            //     sleep_us = 0;
+            // }
         }
     }
 
