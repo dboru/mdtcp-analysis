@@ -9,6 +9,7 @@ parser.add_argument('-f', dest="files", nargs='+', required=True)
 parser.add_argument('-o', '--out', dest="out", default=None)
 parser.add_argument('-k', dest="k", default=None)
 parser.add_argument('-w', dest="workload", default=None)
+parser.add_argument('-bw', dest="bw",type=int, default=10)
 parser.add_argument('-t', dest="time", type=int, default=None)
 
 args = parser.parse_args()
@@ -107,6 +108,8 @@ colors = ['#ff0000','#ff7f00','#ffff00','#00ff00','#00ffff', '#0000ff', '#4B0082
 
 fmdtcp =open('mdtcp_goodput','w')
 
+max_throughput=float((20.0*1e6))
+print(max_throughput)
 
 for i in sorted(throughput.keys()):
   #print i 
@@ -134,7 +137,7 @@ fmdtcp.close()
 axPlot.legend(loc='lower right')
 axPlot.set_xlabel("Rank of Flow")
 axPlot.set_ylabel("Throughput (% of optimal)")
-axPlot.set_ylim(0, 105)
+# axPlot.set_ylim(0, 105)
 axPlot.grid(True)
 # axPlot.set_title( title )
 rank="plots/rank"+args.out.split("/")[1]
@@ -161,7 +164,7 @@ axHist.set_ylabel("Throughput (% of optimal)")
 axHist.set_xticks(xaxis + width/2 + xoffset)
 axHist.set_xticklabels( labels )
 # # axHist.set_yticks(np.arange(0, 100, step=15))
-axHist.set_ylim(0, 105)
+# axHist.set_ylim(0, 105)
 
 if args.out:
      print 'saving to', args.out

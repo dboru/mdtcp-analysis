@@ -11,7 +11,7 @@ queue_size=200
 # test=0 throughput test, test=1 FCT
 qmon=1
 bwm=0
-tcpdump=1
+tcpdump=0
 tcpprobe=0
 
 num_reqs=1000
@@ -35,22 +35,25 @@ fi
 sleep 1
 
 # proto 0=mptcp, proto=1=mdtcp
+
 m=1
-bw=100
-delay=1.0
+bw=20
+bwh=20
+
+delay=0.1
 
 seed=754
 
-while [ $m -le 1 ] ; 
+while [ $m -le 5 ] ; 
 do
   seed=$(( seed + m )) 
 
-  for mytest in 1 ;
+  for mytest in 0 ;
   do 
-    for WORKLOAD in 'one_to_several';
+    for WORKLOAD in 'one_to_one';
     do 
     # 0.2 0.4 0.6 0.8 0.9 ;
-    for load in 0.2 0.8; 
+    for load in 1.0; 
     do 
       
       dload=$(echo "scale=4; $bw*$load" | bc)
@@ -71,9 +74,9 @@ do
 
       for pod in 4 ; 
       do 
-        for proto in 1 0 ;
+        for proto in 1 0  ;
         do 
-          for subflows in 1 4 8; 
+          for subflows in 1 2 3 4 5 6 7 8 ; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
@@ -91,9 +94,9 @@ do
             # cdate=$(date +"%Y%m%d")
             if [ $proto -eq 1 ] ;
             then 
-              redmax=40001
+              redmax=41000
               redmin=40000
-              redburst=41
+              redburst=40
             	redprob=1.0
             	enable_ecn=1
             	enable_red=0
@@ -111,11 +114,11 @@ do
                 fi
               elif [ $proto -eq 0 ]; 
                 then
-                  enable_ecn=1
-                  enable_red=0
-                  redmax=100000
+                  enable_ecn=0
+                  enable_red=1
+                  redmax=120000
                   redmin=40000
-                  redburst=60
+                  redburst=67
                   redprob=0.01
                 	mdtcp=0
                 	dctcp=0
@@ -132,9 +135,11 @@ do
                   
                   out_dir=results/$subdir/$WORKLOAD
 
+                  ping=$cdate'-bw'$bw'delay'$delay'ft'$pod'runtime'$DURATION'/'$WORKLOAD'/flows'
+
                   
                   python src/fattree.py -d $out_dir -t $DURATION --ecmp --iperf \
-                  --workload $WORKLOAD --K $pod --bw $bw --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\
+                  --workload $WORKLOAD --K $pod --bw $bw --bwh $bwh --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\
                   --redmin $redmin --burst  $redburst --queue  $queue_size --prob $redprob --enable_ecn $enable_ecn\
                   --enable_red $enable_red --subflows $subflows --mdtcp_debug $mdtcp_debug --num_reqs $num_reqs\
                   --test $mytest --qmon $qmon --iter $m   --load $load --bwm  $bwm --tcpdump $tcpdump --tcpprobe $tcpprobe
@@ -179,13 +184,19 @@ do
 
                 if [ $mytest -eq 0 ]
                 then 
-                  python src/process/plot_hist_all.py -k $pod -w $WORKLOAD -t $DURATION -f results/$subdir/$WORKLOAD/*/client_iperf*  \
+                  python src/process/plot_hist_all.py -k $pod -bw $bw -w $WORKLOAD -t $DURATION -f results/$subdir/$WORKLOAD/*/client_iperf*  \
                     results/$subdir/$WORKLOAD/max_throughput.txt -o plots/$subdir-$WORKLOAD-throughput.png
                 fi
 
                 # End Plots 
 
               done #protocol type (MDTCP (1), MPTCP(0) )
+
+              if [ $mytest -eq 0 ] 
+              then 
+                python src/process/plot_ping_all.py -path $ping -o plots/$subdir-$WORKLOAD
+                python src/process/plot_queue_cdf_all.py -path $ping -o plots/$subdir-$WORKLOAD
+              fi 
 
             done # topology
 

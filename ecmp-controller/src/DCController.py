@@ -28,7 +28,6 @@ from util import buildTopo,getRouting
 #from util import getRouting
 
 
-
 log = core.getLogger()
 
 # Number of bytes to send for packet_ins
@@ -101,6 +100,8 @@ class DCController(EventMixin):
                 l4 = ip.next
                 hash_input[3] = l4.srcport
                 hash_input[4] = l4.dstport
+                # log.info(' srcIP:'+str(ip.srcip)+':'+str(l4.srcport)+' :dstIP: '+str(ip.dstip)+':'+str(l4.dstport))
+
                 return crc32(pack('LLHHH', *hash_input))
         return 0
 
@@ -126,7 +127,9 @@ class DCController(EventMixin):
         out_name = self.t.node_gen(dpid = out_dpid).name_str()
         hash_ = self._ecmp_hash(packet)
         route = self.r.get_route(in_name, out_name, hash_) 
-        if route is None: 
+        
+        if route is None:
+            log.info(":No Route")     
             return
 
         match = of.ofp_match.from_packet(packet)
@@ -158,8 +161,7 @@ class DCController(EventMixin):
         # Insert flow, deliver packet directly to destination.
         if packet.dst in self.macTable:
             out_dpid, out_port = self.macTable[packet.dst]
-            self._install_reactive_path(event, out_dpid, out_port, packet)
-        
+            self._install_reactive_path(event, out_dpid, out_port, packet)    
             self.switches[out_dpid].send_packet_data(out_port, event.data)
             
         else:

@@ -60,7 +60,7 @@ def plot_cwnds():
         cwnds = parse_file(f)
 
         for cwnd in cwnds.keys():
-            if (len(cwnds[cwnd]['cwnd'])) > 10:
+            if (len(cwnds[cwnd]['cwnd'])) > 5:
                 fig = plt.figure()
                 axPlot = fig.add_subplot(111)
                 axPlot.plot(cwnds[cwnd]['time'],cwnds[cwnd]['cwnd'],marker='.')
