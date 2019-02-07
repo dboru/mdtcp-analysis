@@ -131,7 +131,7 @@ def main():
 
         for line in open(f).xreadlines():
           aline=(line.split(','))
-          if len(aline)==2 and int(aline[1]) <= (1024*args.maxq):
+          if len(aline)==2 and int(aline[1]) <= (5*1000*args.maxq):
             if first_time==0:
               first_time=float(aline[0]);
             elif float(aline[0]) - first_time > 5.0:

@@ -52,7 +52,7 @@ def parse_queue(proto,sf):
      if 'queue_size' in f:
         for line in open(path+f).xreadlines():
           aline=line.split(',')
-          if len(aline)==2 and int(aline[1]) <= (1024*args.maxq):
+          if len(aline)==2 and int(aline[1]) <= (5*1000*args.maxq):
             if first_time==0:
               first_time=float(aline[0]);
             elif float(aline[0]) - first_time > 2.0:

@@ -101,7 +101,7 @@ class FatTreeTopo(Topo):
     LAYER_EDGE = 2
     LAYER_HOST = 3
 
-    def __init__(self, k = 4,bw_sw=10,bw_host=50):
+    def __init__(self, k = 4,hosts_per_edge=2,bw_sw=10,bw_host=50):
         ''' Create FatTree topology 
             
             k : Number of pods (can support upto k^3/4 hosts)
@@ -112,16 +112,20 @@ class FatTreeTopo(Topo):
         self.node_gen = FatTreeNode
         self.numPods = k
         self.aggPerPod = k / 2
+        self.hostPerEdge=hosts_per_edge
 
         pods = range(0, k)
         edge_sw = range(0, k/2)
         agg_sw = range(k/2, k)
         core_sw = range(1, k/2+1)
+        #print((hosts_per_edge)) 
         # original code
-        # hosts = range(2, k/2+2)
+        #if hosts_per_edge==5:
+        hosts = range(2, k/2+self.hostPerEdge)
+       
 
         # added 3 to emulate more hosts (for k=4, 5 hosts per edge switch)
-        hosts = range(2, k/2+2+8)
+        #hosts = range(2, hosts_per_edge+2)
         
         
 

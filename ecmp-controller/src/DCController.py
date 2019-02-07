@@ -100,7 +100,7 @@ class DCController(EventMixin):
                 l4 = ip.next
                 hash_input[3] = l4.srcport
                 hash_input[4] = l4.dstport
-                # log.info(' srcIP:'+str(ip.srcip)+':'+str(l4.srcport)+' :dstIP: '+str(ip.dstip)+':'+str(l4.dstport))
+                #log.info(' srcIP:'+str(ip.srcip)+':'+str(l4.srcport)+' :dstIP: '+str(ip.dstip)+':'+str(l4.dstport))
 
                 return crc32(pack('LLHHH', *hash_input))
         return 0

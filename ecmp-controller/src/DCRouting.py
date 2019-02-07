@@ -84,8 +84,7 @@ class Routing(object):
                     for path in path_list:
                         last_node = path[-1]
                         for frontier_node in self.topo.upper_nodes(last_node):
-                            new_dst_paths[frontier_node] = [ path + [frontier_node]]
-                        
+                            new_dst_paths[frontier_node] = [ path + [frontier_node]] 
                             if frontier_node in src_paths:
                                 src_path_list = src_paths[frontier_node]
                                 dst_path_copy = copy( path )

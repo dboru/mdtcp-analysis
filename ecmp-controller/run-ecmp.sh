@@ -21,13 +21,16 @@ echo $cdir
 export PYTHONPATH=${PYTHONPATH}:$cdir/src
 mkdir -p plots
 
+killall python
+ 
 ctrl=$( ps ax | grep DCController | wc -l )
 
 controllerId=0
+hosts_per_edge=5
 
 if [ $ctrl -le 1 ] ;
 then 
-  python src/pox/pox.py DCController --topo=ft,4 --routing=ECMP &
+  python src/pox/pox.py DCController --topo=ft,4,$hosts_per_edge --routing=ECMP &
   controllerId=$!
   echo $controllerId
 fi
@@ -37,14 +40,16 @@ sleep 1
 # proto 0=mptcp, proto=1=mdtcp
 
 m=1
-bw=20
-bwh=20
+bw=10
+bwh=10
 
 delay=0.1
 
+
+
 seed=754
 
-while [ $m -le 5 ] ; 
+while [ $m -le 15 ] ; 
 do
   seed=$(( seed + m )) 
 
@@ -65,7 +70,7 @@ do
         echo $dload
         cd ../Trace-generator
         rm  trace_file/mdtcp-output.trace
-        ./trace_generator $dload $num_reqs $seed
+        ./trace_generator $dload $num_reqs $seed $hosts_per_edge
         cd ../ecmp-controller
       fi
 
@@ -76,7 +81,7 @@ do
       do 
         for proto in 1 0  ;
         do 
-          for subflows in 1 2 3 4 5 6 7 8 ; 
+          for subflows in 1 2 3 4 5 6 7 8; 
           do
             # find . -name 'ss_clnt_10*' | xargs rm -f
             
@@ -142,7 +147,7 @@ do
                   --workload $WORKLOAD --K $pod --bw $bw --bwh $bwh --delay $delay --mdtcp $mdtcp --dctcp $dctcp --redmax $redmax\
                   --redmin $redmin --burst  $redburst --queue  $queue_size --prob $redprob --enable_ecn $enable_ecn\
                   --enable_red $enable_red --subflows $subflows --mdtcp_debug $mdtcp_debug --num_reqs $num_reqs\
-                  --test $mytest --qmon $qmon --iter $m   --load $load --bwm  $bwm --tcpdump $tcpdump --tcpprobe $tcpprobe
+                  --test $mytest --qmon $qmon --iter $m   --load $load --bwm  $bwm --tcpdump $tcpdump --tcpprobe $tcpprobe --hedge $hosts_per_edge
 
                   if [ $mytest -eq 1 ];
                   then 

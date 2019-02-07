@@ -108,7 +108,7 @@ colors = ['#ff0000','#ff7f00','#ffff00','#00ff00','#00ffff', '#0000ff', '#4B0082
 
 fmdtcp =open('mdtcp_goodput','w')
 
-max_throughput=float((20.0*1e6))
+max_throughput=float((0.2*1e6))
 print(max_throughput)
 
 for i in sorted(throughput.keys()):

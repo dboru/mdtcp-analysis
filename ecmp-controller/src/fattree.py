@@ -185,6 +185,12 @@ parser.add_argument('--bwh',
                     dest="bwh",
                     help="Host interface bw",
                     default=10)
+parser.add_argument('--hedge',
+                    type=int,
+                    dest="hedge",
+                    help="Number of hosts per Edge switch",
+                    default=2)
+
 
 args = parser.parse_args()
 
@@ -261,7 +267,7 @@ class ClientThread(threading.Thread):
             if self.counter < self.nreqs:
                 dst,fs,tstart=self.myload[self.counter]
                 # For 1-to-1
-                dst=self.server
+                #dst=self.server
 
                 if self.counter==0:
                     #dstb=random.choice(self.hosts)
@@ -494,7 +500,7 @@ class Workload():
                 start_tcpprobe(output_dir,"cwnd.txt")
 
             for mapping in self.mappings:
-                sleep(random.uniform(0.1,1.0))
+                # sleep(random.uniform(0.1,1.0))
                 server, client = mapping
                 # ./greedy -v localhost 8888
                 # client.cmd('./../../greedy/greedy -v %s 5001 & '%(server.IP()))
@@ -558,6 +564,7 @@ class Workload():
 
             client.cmd("iperf -c %s  -p %d -b %dM  -n %d -l %d -yC >> %s/flows_10 & " \
                         % (server.IP(),port_map[server], int(args.bwh),fs,fs,output_dir))
+            
             n+=1
             
             if n > len(self.net.hosts)/2 and bwmng==0 :
@@ -841,8 +848,8 @@ def FatTreeNet(args, bw=10, cpu=-1, queue=425, controller='DCController'):
 
     info('*** Creating the topology')
     # ,delay=str(args.delay)+'ms',
-    topo = FatTreeTopo(args.K,args.bw,args.bwh)
-    host = custom(CPULimitedHost, cpu=1.0/16.0)
+    topo = FatTreeTopo(args.K,int(args.hedge),args.bw,args.bwh)
+    host = custom(CPULimitedHost, cpu=1.0/(20+8.0*args.hedge))
     if args.mdtcp==1 or args.dctcp==1:
         link = custom(TCLink, **red_ecn)
     else:
@@ -854,7 +861,7 @@ def FatTreeNet(args, bw=10, cpu=-1, queue=425, controller='DCController'):
         net = Mininet(topo,link=link, switch=OVSKernelSwitch,
                 controller=RemoteController, autoStaticArp=True)
 
-
+   
     return net
 
 
@@ -869,6 +876,7 @@ def get_max_throughput(net, output_dir):
 
     client.cmd('iperf -c '+ server.IP()+ ' -p 5001 -t '+ str(seconds)+ \
         ' -yc  -i 10 > '+output_dir+'/max_throughput.txt &')
+
     # progress(args.time + 1)
     progress(30)
     # proc.communicate()
@@ -983,7 +991,8 @@ def ConfigureOffloadingAndQdisc(args,net):
         node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
-        node.cmd("sysctl -w net.ipv4.tcp_ecn=1")
+        node.cmd("sysctl -w net.ipv4.tcp_ecn=0")
+        node.cmd("echo "+node.IP() + " >> ip_address")
         for port in node.ports:
             if str.format('{}', port) != 'lo':
                 node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
@@ -1064,11 +1073,13 @@ def FatTreeTest(args,controller):
     #hosts = range(2, args.K/2+2)
     
     net.start()
-    
+    print('Waiting for switches to connect to the controller')
+    sleep(10)
     net=ConfigureOffloadingAndQdisc(args,net)
 
-    print('Waiting for switches to connect to the controller')
     sleep(5)
+
+    # CLI(net)
 
     if args.test == 1:
 
@@ -1129,6 +1140,10 @@ def FatTreeTest(args,controller):
 
 
             sleep(190)
+
+            for host in net.hosts:
+                host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+
             #os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
@@ -1172,7 +1187,10 @@ def FatTreeTest(args,controller):
 
             workload.run(cwd,nflows)
 
-            os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
+            for host in net.hosts:
+                host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+
+            # os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
 
             allKiller()
             sleep(5)

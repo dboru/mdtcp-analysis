@@ -9,8 +9,8 @@ ROUTING = {'ECMP' : HashedRouting}
 
 
 def buildTopo(topo):
-    topo_name, topo_param = topo.split( ',' )
-    return TOPOS[topo_name](makeNumeric(topo_param))
+    topo_name, topo_param1,topo_param2 = topo.split( ',' )
+    return TOPOS[topo_name](makeNumeric(topo_param1),makeNumeric(topo_param2))
 
 
 def getRouting(routing, topo):
