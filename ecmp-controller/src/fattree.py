@@ -1143,7 +1143,7 @@ def FatTreeTest(args,controller):
 
             for host in net.hosts:
                 host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
-
+                host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
             #os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
@@ -1189,6 +1189,7 @@ def FatTreeTest(args,controller):
 
             for host in net.hosts:
                 host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+                host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
 
             # os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
 
