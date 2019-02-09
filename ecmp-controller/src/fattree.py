@@ -954,39 +954,40 @@ def ConfigureOffloadingAndQdisc(args,net):
         node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
-        for port in node.ports:
+        for port in node.ports:    
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
                 node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
-                # node.cmd(str.format('tc qdisc del dev {} root',port))
-                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
-                # #sudo tc qdisc replace dev eth6 root handle 1: netem rate 100mbit    
-                # node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+                node.cmd(str.format('tc qdisc del dev {} root',port))
+                node.cmd(str.format('sudo ip link set txqueuelen {} dev {}',args.queue,port))
+                node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
 
-                # # sw=layer(port.split('-')[0])
+                slayer=layer(str(port).split('-')[0])
 
+                if slayer=='edge':                  
+                    node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bwh))
+                    if args.mdtcp==1 or args.dctcp==1:
+                        # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                              ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bwh))                    
+                    else:
+                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                             bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bwh))
+                else:
+                    node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bw))
+                    if args.mdtcp==1 or args.dctcp==1:
+                        # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                              ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))                    
+                    else:
+                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                             bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bw))
+     
+                node.cmd(str.format('tc qdisc replace dev {} parent 6:1 handle 10: netem delay {}ms limit {}', port,args.delay,args.queue))
                
-                # # if  args.tcpdump and args.iter==1 and sw =='edge' and ('eth1' in iface or 'eth2' in iface):
-                # #     start_tcpdump(output_dir,iface)
 
-                # node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1500', port,args.bw))
-
-                # #node.cmd(str.format('tc class add dev {} parent 1: classid 1:1 htb rate {}Mbit ', port,args.bw))
-                # if args.mdtcp==1 or args.dctcp==1:
-                #     # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
-                #     node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 1000000 min {} max {} avpkt 1000 burst {} \
-                #           ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))                    
-                # else:
-                #     node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 1000000 min 33000 max 100000 avpkt 1000 burst 60 ecn \
-                #          adaptive bandwidth {} ',port,args.bw))
-
-                    
-                # node.cmd(str.format('tc qdisc replace dev {} parent 10:1 handle 20: netem delay {}ms', port,args.delay))
-                    
     # disable offloading and configure qdisc on switch interfaces
     nodes = net.hosts
-    print(len(nodes))
-    # nodes = net.switches
     for node in nodes:
         node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
@@ -997,7 +998,9 @@ def ConfigureOffloadingAndQdisc(args,net):
             if str.format('{}', port) != 'lo':
                 node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
                 node.cmd(str.format('tc qdisc del dev {} root',port))
-                node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
+                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
+                node.popen('ip link set txqueuelen %d dev %s'%(int(args.queue),port)).wait()
+
 
                 # node_route = node.cmd("ip route show")
                 # node_route=node_route.rstrip()
@@ -1074,10 +1077,10 @@ def FatTreeTest(args,controller):
     
     net.start()
     print('Waiting for switches to connect to the controller')
-    sleep(10)
+    sleep(5)
     net=ConfigureOffloadingAndQdisc(args,net)
 
-    sleep(5)
+    
 
     # CLI(net)
 
@@ -1142,8 +1145,8 @@ def FatTreeTest(args,controller):
             sleep(190)
 
             for host in net.hosts:
-                host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
-                host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
+                host.cmd("nstat -a > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+                # host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
             #os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
@@ -1188,8 +1191,8 @@ def FatTreeTest(args,controller):
             workload.run(cwd,nflows)
 
             for host in net.hosts:
-                host.cmd("netstat -s > %s/netstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
-                host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
+                host.cmd("nstat -s > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+                # host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
 
             # os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
 

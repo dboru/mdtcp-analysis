@@ -90,7 +90,7 @@ int main(int argc, char **argv)
 
 	int num_sch=0;
 	double time_ref=0.0;
-        int hosts_per_edge=2;
+	int hosts_per_edge=2;
 	int seed=754;
 
 
@@ -98,8 +98,8 @@ int main(int argc, char **argv)
 		load=atof(argv[1]);
 		flow_total_num=atoi(argv[2]);
 		seed=atoi(argv[3]);
-                hosts_per_edge=atoi(argv[4]);
-                host_num=8*hosts_per_edge;
+		hosts_per_edge=atoi(argv[4]);
+		host_num=8*hosts_per_edge;
 	} else if (argc < 2  && argc > 1)
 	{
 		load=atof(argv[1]);
@@ -111,9 +111,12 @@ int main(int argc, char **argv)
 	int ipcount=0;
 	int host_port_offset[host_num+1];
 
-	for (p=0;p<4;p++)
-		for (e=0; e<2;e++)
-			for (h=2;h<(hosts_per_edge+2);h++){
+	for (p=0;p<4;p++) 
+	{
+		for (e=0; e<2;e++) 
+		{
+			for (h=2;h<(hosts_per_edge+2);h++)
+			{
 				char ip[80];
 				strcpy(ip, "10.");
 				sprintf(ip, "%s%d", ip, p);
@@ -129,6 +132,8 @@ int main(int argc, char **argv)
 				//printf("Ip address: %s\n",ipList[0]);
 
 			}
+		}
+	}
 
 	flow_size_dist = (struct cdf_table*)malloc(sizeof(struct cdf_table));
 	init_cdf(flow_size_dist);
@@ -138,9 +143,9 @@ int main(int argc, char **argv)
 	/* Average request arrival interval (in microsecond) */
 	double mean_flowsize = avg_cdf(flow_size_dist); 
 
-	req_per_sec=((1000000*host_num*load)/(8*mean_flowsize+(8*mean_flowsize*header_size/max_payload_size)));
-
-	period_us = 8.0*(mean_flowsize+(mean_flowsize*header_size/max_payload_size))/(host_num*load); 
+	req_per_sec=((1000000*16*load)/(8*mean_flowsize+(8*mean_flowsize*header_size/max_payload_size)));
+	// max. sustained load for K=4 topology is 16*BW
+	period_us = 8.0*(mean_flowsize+(mean_flowsize*header_size/max_payload_size))/(16.0*load); 
 
 
 	// period_us = (8*avg_cdf(flow_size_dist)*(max_ether_size + 66))/(host_num*load*max_payload_size); 
