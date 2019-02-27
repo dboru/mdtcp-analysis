@@ -177,9 +177,10 @@ class TCIntf( Intf ):
        Allows specification of bandwidth limits (various methods)
        as well as delay, loss and max queue length"""
 
+
     def bwCmds( self, bw=None, speedup=0, use_hfsc=False, use_tbf=False):
         "Return tc commands to set bandwidth"
-	#print "RED BURST: " + str(red_burst) + "XXXXXXXXXXXXXXXX"
+	    #print "RED BURST: " + str(red_burst) + "XXXXXXXXXXXXXXXX"
 
         cmds, parent = [], ' root '
 
@@ -216,10 +217,13 @@ class TCIntf( Intf ):
     def markingCmds( parent, bw=None, enable_ecn=False, enable_red=False,
                      red_limit = 1000000, red_min=20000, red_max=25000,
                      red_avpkt=1000, red_burst=20, red_prob=1.0):
+        
+        # print(bw,enable_ecn,enable_red)
         if (enable_ecn and enable_red):
             error('Cannot enable both ECN and RED\n')
         if bw is None:
             return []
+
 
         if enable_ecn:
             cmds = [ '%s qdisc add dev %s' + parent +
@@ -228,6 +232,7 @@ class TCIntf( Intf ):
                     'burst %d ' % red_burst +
                     'bandwidth %fmbit probability %f ecn' % (bw, red_prob) ]
             parent =' parent 6: '
+
         elif enable_red:
             cmds = [ '%s qdisc add dev %s' + parent +
                     'handle 6: red limit %d ' % red_limit +
@@ -237,6 +242,8 @@ class TCIntf( Intf ):
             parent= ' parent 6: '
         else:
             cmds = []
+
+        
 
         return cmds, parent
 
@@ -275,15 +282,24 @@ class TCIntf( Intf ):
 		red_min=20000, red_max=25000, red_avpkt=1000, red_burst=20,
 		red_prob=1.0, **params ):
         "Configure the port and set its properties."
-	#traceback.print_tb()
-	#print "RED: " + str(enable_red) + " YYYYYYYYYYYYYY"
-	#print "BURST : " + str(red_burst) + "ZZZZZZZZZZZ"
+    	#traceback.print_tb()
+    	#print "RED: " + str(enable_red) + " YYYYYYYYYYYYYY"
+    	#print "BURST : " + str(red_burst) + "ZZZZZZZZZZZ"
+       
 
         result = Intf.config( self, **params)
+
+        def on (isOn):
+            "Helper method: bool -> 'on/''off'"
+            return 'on' if isOn else 'off'
+
 
         # Disable GRO
         if disable_gro:
             self.cmd( 'ethtool -K %s gro off' % self )
+
+        # # Set offload parameters with ethtool
+        # self.cmd('ethtool -K',self,'gro',on(gro),'tx',on(txo),'rx',on(rxo))
 
         # Optimization: return if nothing else to configure
         # Question: what happens if we want to reset things?

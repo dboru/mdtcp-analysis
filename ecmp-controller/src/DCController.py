@@ -1,6 +1,7 @@
 ''' Simple data center controller
 
-    @author Milad Sharif (msharif@stanford.edu)
+    @author Milad Sharif (msharif@stanford.edu) original author
+    @author Dejene Boru Oljira (oljideje@kau.se) customized
     
     based on riplpox 
 '''
@@ -57,6 +58,10 @@ class Switch(EventMixin):
         self.connection.send(msg)
                         
     def install(self, port, match, modify = False, buf = -1, idle_timeout = 0, hard_timeout = 0):
+        '''
+        idle_timeout: number of secs after which a flow entry is removed from flow table because no packets match it
+        hard_timeout: number of secs after which the flow entry is removed from the flow table and the hardware 
+        '''
         msg = of.ofp_flow_mod()
         msg.match = match
         if modify:
@@ -129,7 +134,7 @@ class DCController(EventMixin):
         route = self.r.get_route(in_name, out_name, hash_) 
         
         if route is None:
-            log.info(":No Route")     
+            log.info("No Route")     
             return
 
         match = of.ofp_match.from_packet(packet)

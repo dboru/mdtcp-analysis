@@ -460,6 +460,7 @@ class Workload():
                     server.cmd('iperf -s -p 5001 -Z olia >> /dev/null & ')
                 else:
                     server.cmd('iperf -s -p 5001 -Z reno >> /dev/null & ')
+                server.cmd('netserver >> /dev/null & ')
 
 
                 # server.cmd('./../../greedy/greedy -v -s 5001  &')
@@ -469,6 +470,8 @@ class Workload():
                 if intf.link:
                     interfaces.append(intf.link.intf1.name)
                     interfaces.append(intf.link.intf2.name)
+
+        
         sleep(2)
         if args.qmon == 1:
             print('started queue monitoring! ',subflows)
@@ -483,7 +486,7 @@ class Workload():
                         # Popen("tstat -l -N net.conf -i %s -s %s/trace-iface-%s"%(iface,output_dir,iface), shell=True)    
                     qmons.append(start_qmon(iface,outfile="%s/queue_size_%s-%s_iter%s.txt"
                                             % (output_dir, sw,iface,str(args.iter))))
-
+            
      
         if args.test==1:
             
@@ -500,27 +503,28 @@ class Workload():
                 start_tcpprobe(output_dir,"cwnd.txt")
 
             for mapping in self.mappings:
-                # sleep(random.uniform(0.1,1.0))
+                sleep(random.uniform(0.1,0.5))
                 server, client = mapping
                 # ./greedy -v localhost 8888
                 # client.cmd('./../../greedy/greedy -v %s 5001 & '%(server.IP()))
                 
                 if args.mdtcp and args.subflows==1:
-                    client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z dctcp -p 5001 -t '+ str(self.seconds)+ \
-                        ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
+                   client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z dctcp -p 5001 -t '+ str(self.seconds)+ \
+                       ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
                 elif args.mdtcp and args.subflows>1:
-                    client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z mdtcp -p 5001 -t '+ str(self.seconds)+ \
-                        ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
-                elif args.mdtcp==0 and args.subflows>1:
-                    client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z olia -p 5001 -t '+ str(self.seconds)+ \
-                        ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
+                   client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z mdtcp -p 5001 -t '+ str(self.seconds)+ \
+                       ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
+                elif args.mdtcp == 0 and args.subflows>1:
+                   client.cmd('iperf -c '+ server.IP()+ '  ' +' -Z olia -p 5001 -t '+ str(self.seconds)+ \
+                       ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
                 else:
-                    client.cmd('iperf -c '+ server.IP()+ ' ' +' -Z reno -p 5001 -t '+ str(self.seconds)+ \
-                        ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
+                   client.cmd('iperf -c '+ server.IP()+ ' ' +' -Z reno -p 5001 -t '+ str(self.seconds)+ \
+                       ' -yc  -i 1 > '+output_dir+'/client_iperf-'+client.IP()+'-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
 
-                client.cmd('ping '+ server.IP()+ ' -i 1  > '+output_dir+'/ping-'+client.IP()+\
+                client.cmd('ping '+ server.IP()+ ' -i 1 -c '+str(self.seconds)+' > '+output_dir+'/ping-'+client.IP()+\
                    '-'+server.IP()+'_iter'+str(args.iter)+'.txt &')
 
+                    
             if args.bwm_ng and args.iter==1:
                 start_bwmng(output_dir)
             sleep(args.time)
@@ -835,31 +839,40 @@ def stop_tcpprobe():
     Popen("killall -9 cat", shell=True).wait()
 
 def FatTreeNet(args, bw=10, cpu=-1, queue=425, controller='DCController'):
-    droptail = {'delay':str(args.delay)+'ms','max_queue_size': args.queue}
+    droptail = {'bw':args.bwh,'delay':str(args.delay)+'ms','max_queue_size': args.queue}
     # 'delay':str(args.delay)+'ms',
-    red = {'delay':str(args.delay)+'ms','max_queue_size': args.queue,'enable_red':True,'enable_ecn': False, \
-    'red_burst':args.burst,'red_prob':args.prob,'red_avpkt':1000,\
-         'red_min':args.redmin, 'red_max':args.redmax,'red_limit':1000000}
     
-    red_ecn = {'delay':str(args.delay)+'ms','max_queue_size': args.queue, 'enable_ecn': True, \
-    'enable_red': False,\
-            'red_min': args.redmin, 'red_max': args.redmax, 'red_burst': args.burst, \
-            'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 1000000}
+    if args.mdtcp==1 or args.dctcp==1:
+        red_ecn = {'bw':args.bw,'delay':str(args.delay)+'ms','max_queue_size': args.queue, 'enable_ecn': True, \
+        'enable_red': False,'red_min': args.redmin, 'red_max': args.redmax, 'red_burst': args.burst, \
+        'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 200000}
+    else:
+        red = {'delay':str(args.delay)+'ms','max_queue_size': args.queue,'enable_red':True,'enable_ecn': False, \
+        'red_burst':args.burst,'red_prob':args.prob,'red_avpkt':1000,\
+         'red_min':args.redmin, 'red_max':args.redmax,'red_limit':200000}
+
 
     info('*** Creating the topology')
     # ,delay=str(args.delay)+'ms',
-    topo = FatTreeTopo(args.K,int(args.hedge),args.bw,args.bwh)
-    host = custom(CPULimitedHost, cpu=1.0/(20+8.0*args.hedge))
-    if args.mdtcp==1 or args.dctcp==1:
-        link = custom(TCLink, **red_ecn)
-    else:
-        link = custom(TCLink, **red)
+    topo = FatTreeTopo(args.K,int(args.hedge),red_ecn,droptail)
+    host = custom(CPULimitedHost, cpu=0.01)
+    
+    # if args.mdtcp==1 or args.dctcp==1:
+    #     link = custom(TCLink, **red_ecn)
+    # else:
+    #     link = custom(TCLink, **red)
+
     if args.test==1:
-        net = Mininet(topo, host=TestHost, link=link, switch=OVSKernelSwitch,
-                controller=RemoteController, autoStaticArp=True)
+        net = Mininet(topo, host=TestHost, switch=OVSKernelSwitch,
+                controller=None, autoStaticArp=True)
     else:
-        net = Mininet(topo,link=link, switch=OVSKernelSwitch,
-                controller=RemoteController, autoStaticArp=True)
+        net = Mininet(topo,host=host, switch=OVSKernelSwitch,controller=None, autoStaticArp=True)
+
+    print('Adding remote controller ...')
+
+    net.addController('c0',controller=RemoteController,ip='127.0.0.1',port=6633)
+
+    #net.addController('c0',controller=RemoteController,ip='130.243.26.7')
 
    
     return net
@@ -869,18 +882,28 @@ def get_max_throughput(net, output_dir):
     
     cprint("Finding max throughput...", 'red')
     seconds = args.time
-    server, client = net.hosts[0], net.hosts[1]
+    server, client = net.hosts[0], net.hosts[len(net.hosts)-1]
+    # server1, client1 = net.hosts[7], net.hosts[8]
     # server.cmd('sysctl net.ipv4.tcp_ecn=1')
 
     server.cmd('iperf -s -p 5001 & ')
+    # server1.cmd('iperf -s -p 5001 & ')
 
     client.cmd('iperf -c '+ server.IP()+ ' -p 5001 -t '+ str(seconds)+ \
-        ' -yc  -i 10 > '+output_dir+'/max_throughput.txt &')
+        ' -yc  -i 1 > '+output_dir+'/max_throughput.txt &')
+
+    # client1.cmd('iperf -c '+ server1.IP()+ ' -p 5001 -t '+ str(seconds)+ \
+    #     ' -yc  -i 1 > '+output_dir+'/throughput_same_edge.txt &')
+    progress(30)
+
+    client.cmd('ping %s -i 1 -c 60 > ping_test &' %server.IP())
+    # client1.cmd('ping %s -i 1 -c 60 > ping_test_same_edge &' %server1.IP())
+    progress(60)
 
     # progress(args.time + 1)
-    progress(30)
+   
     # proc.communicate()
-    os.system('killall -9 iperf  iperf3' )
+    os.system('killall -9 iperf  iperf3 ping' )
 
 def install_proactive(net, topo):
     """
@@ -948,6 +971,30 @@ def disableMDTCP():
     os.system("sudo echo -n 1 > /sys/module/mptcp_ndiffports/parameters/num_subflows")
     os.system("sudo sysctl -w net.ipv4.tcp_congestion_control=olia")
 
+
+def disableOffloading(net):
+    nodes = net.switches
+    for node in nodes:
+        node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+        for port in node.ports:    
+            if str.format('{}', port) != 'lo':
+                node.cmd(str.format('ethtool -K {} gso off tso off sg off gro off tx off rx off', port))
+    nodes = net.hosts
+    for node in nodes:
+        node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv4.tcp_ecn=0")
+        for port in node.ports:
+            if str.format('{}', port) != 'lo':
+                
+                node.cmd(str.format('sudo ethtool -K {} gro off sg off gso off tso off rx off tx off', port))
+                
+    return net
+
+
 def ConfigureOffloadingAndQdisc(args,net):
     nodes = net.switches
     for node in nodes:
@@ -957,33 +1004,43 @@ def ConfigureOffloadingAndQdisc(args,net):
         for port in node.ports:    
             if str.format('{}', port) != 'lo':
                 #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
-                node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
-                node.cmd(str.format('tc qdisc del dev {} root',port))
-                node.cmd(str.format('sudo ip link set txqueuelen {} dev {}',args.queue,port))
-                node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+                node.cmd(str.format('ethtool -K {} gso off tso off sg off gro off tx off rx off', port))
+                
+                # node.cmd(str.format('tc qdisc del dev {} root',port))
+                # node.cmd(str.format('sudo ip link set txqueuelen {} dev {}',args.queue,port))
+                # node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
 
-                slayer=layer(str(port).split('-')[0])
+                # slayer=layer(str(port).split('-')[0])
 
-                if slayer=='edge':                  
-                    node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bwh))
-                    if args.mdtcp==1 or args.dctcp==1:
-                        # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
-                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
-                              ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bwh))                    
-                    else:
-                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
-                             bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bwh))
-                else:
-                    node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bw))
-                    if args.mdtcp==1 or args.dctcp==1:
-                        # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
-                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
-                              ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))                    
-                    else:
-                        node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
-                             bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bw))
-     
-                node.cmd(str.format('tc qdisc replace dev {} parent 6:1 handle 10: netem delay {}ms limit {}', port,args.delay,args.queue))
+                # #  tc qdisc add dev eth0 root codel limit 200 target 4ms interval 0.12ms ecn ce_threshold 30
+
+                # if slayer=='edge':                  
+                #     node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bwh))
+                #     if args.mdtcp==1 or args.dctcp==1:
+                #         # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                #         node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #               ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bwh)) 
+                        
+                #         # node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: codel limit 200 target 4ms interval 0.12ms ecn ce_threshold 3000',port))
+                              
+
+                #     else:
+                #         node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #              bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bwh))
+                # else:
+                #     node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1000', port,args.bw))
+                #     if args.mdtcp==1 or args.dctcp==1:
+                #         # tc qdisc add dev eth0 root fq_codel limit 2000 target 3ms interval 40ms noecn
+                #         node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #               ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bw))
+
+                #         # node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: codel limit 200 target 4ms interval 0.12ms ecn ce_threshold 3000',port))
+                                              
+                #     else:
+                #         node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #              bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bw))
+                
+                # node.cmd(str.format('tc qdisc replace dev {} parent 6:1 handle 10: netem delay {}ms limit {}', port,args.delay,args.queue))
                
 
     # disable offloading and configure qdisc on switch interfaces
@@ -993,26 +1050,32 @@ def ConfigureOffloadingAndQdisc(args,net):
         node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
         node.cmd("sysctl -w net.ipv4.tcp_ecn=0")
-        node.cmd("echo "+node.IP() + " >> ip_address")
+        # node.cmd("echo "+node.IP() + " >> ip_address")
         for port in node.ports:
             if str.format('{}', port) != 'lo':
-                node.cmd(str.format('ethtool -K {} gro off gso off tso off rx off tx off', port))
-                node.cmd(str.format('tc qdisc del dev {} root',port))
-                # node.cmd(str.format('ip link set txqueuelen {} dev {}',args.queue,port))
-                node.popen('ip link set txqueuelen %d dev %s'%(int(args.queue),port)).wait()
+                node.cmd(str.format('sudo ethtool -K {} gro off sg off gso off tso off rx off tx off', port))
+                
+                # node.cmd(str.format('sudo tc qdisc del dev {} root',port))
+                # node.cmd(str.format('sudo ip link set txqueuelen {} dev {}',args.queue,port))
+                # # node.popen('sudo ip link set txqueuelen %d dev %s'%(int(args.queue),port)).wait()
+                # # ip route change default via x.x.x.x initcwnd 20 initrwnd 20
+                # # node_route = node.cmd("ip route show")
+                # # node_route= node_route.rstrip()
+                # # node.cmd('ip route replace %s %s %d %s %d %s %s' % (node_route, 'initcwnd', 4,'initrwnd',4,'rto_min','10ms'))
+                
+                # node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+                # node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bwh))
+                # if args.mdtcp==1 or args.dctcp==1:
+                #     node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #               ecn bandwidth {} probability 1.0 ', port,args.redmin,args.redmax,args.burst,args.bwh))
+                # else:
+                #     node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 6: red limit 200000 min {} max {} avpkt 1000 burst {} \
+                #              bandwidth {} probability 0.01 ',port,args.redmin,args.redmax,args.burst,args.bwh))
+                
+                # node.cmd(str.format('tc qdisc replace dev {} parent 6:1 handle 10: netem delay {}ms',port,args.delay)) 
+                # # node.cmd('tc -s -d qdisc show ')
 
-
-                # node_route = node.cmd("ip route show")
-                # node_route=node_route.rstrip()
-                # node.popen('ip route replace %s %s %d %s %s' % (node_route, 'initcwnd', 4,'rto_min','10ms')).wait()
-                # node.popen('ip route flush cache').wait()
-                # node.cmd('sysctl -w net.ipv4.tcp_no_metrics_save=1')
-                # node.cmd('sysctl -w net.ipv4.route.flush=1') 
-
-                # node.cmd(str.format('tc qdisc replace dev {} root netem delay {}ms rate {}Mbit', port,args.delay,args.bw))
-                node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
-                node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit quantum 1500', port,args.bwh))
-                node.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: netem delay {}ms',port,args.delay))                
+                             
                 
     return net
 
@@ -1076,11 +1139,13 @@ def FatTreeTest(args,controller):
     #hosts = range(2, args.K/2+2)
     
     net.start()
+    
     print('Waiting for switches to connect to the controller')
     sleep(5)
-    net=ConfigureOffloadingAndQdisc(args,net)
+    net=disableOffloading(net)
+    # net=ConfigureOffloadingAndQdisc(args,net)
 
-    
+    sleep(30)
 
     # CLI(net)
 
@@ -1090,7 +1155,7 @@ def FatTreeTest(args,controller):
             cwd = os.path.join(args.output_dir, "flows%d" % (nflows))
 
             if not os.path.exists(cwd):
-                    os.makedirs(cwd) 
+                os.makedirs(cwd) 
 
             if args.mdtcp:
                 if nflows==1:
@@ -1111,6 +1176,8 @@ def FatTreeTest(args,controller):
 
             for h in net.hosts:
                 h.startServer()
+                
+                # h.cmd("nstat -a > %s/nstat1_%s_iter%d.txt" %(cwd,h.IP(),args.iter), shell=True)
                 #h.startEmpServer()
 
             sleep(2)
@@ -1132,7 +1199,7 @@ def FatTreeTest(args,controller):
 
             # sleep(random.uniform(0.1,0.3))
 
-            sleep(getRunTime()+10)
+            sleep(getRunTime())
             if args.tcpprobe:
                 stop_tcpprobe()
             if args.tcpdump:
@@ -1142,11 +1209,11 @@ def FatTreeTest(args,controller):
                     qmon.terminate()
 
 
-            sleep(190)
+            sleep(60)
 
-            for host in net.hosts:
-                host.cmd("nstat -a > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
-                # host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
+            # for host in net.hosts:
+            #     host.cmd("nstat -a > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+            #     # host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
             #os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
             allKiller()
 
@@ -1191,8 +1258,8 @@ def FatTreeTest(args,controller):
             workload.run(cwd,nflows)
 
             for host in net.hosts:
-                host.cmd("nstat -s > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
-                # host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
+                host.cmd("nstat -a > %s/nstat_%s_iter%d.txt" %(cwd,host.IP(),args.iter), shell=True)
+                host.cmd("cat /proc/net/mptcp_net/snmp > %s/mptcp_stat_%s_iter%d.txt"%(cwd,host.IP(),args.iter),shell=True) 
 
             # os.system("sh dump_sw_stats.sh > "+cwd+"/sw_port_dump")   
 
@@ -1241,5 +1308,5 @@ if __name__ == '__main__':
     else:
         info('**error** please specify either ecmp, dijkstra or tlr\n')
     #clean()
-    Popen("killall -9 top bwm-ng iperf tcpdump ", shell=True).wait()
+    Popen("killall -9 top bwm-ng iperf tcpdump ping", shell=True).wait()
    

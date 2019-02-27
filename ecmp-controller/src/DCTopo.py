@@ -8,6 +8,7 @@ Fat tree topology for data center networking
 '''
 
 from mininet.topo import Topo
+from mininet.link import TCIntf
 
 
 class FatTreeNode(object):
@@ -100,8 +101,9 @@ class FatTreeTopo(Topo):
     LAYER_AGG  = 1
     LAYER_EDGE = 2
     LAYER_HOST = 3
-
-    def __init__(self, k = 4,hosts_per_edge=2,bw_sw=10,bw_host=50):
+    # def __init__(self, k = 4,hosts_per_edge=2,bw_sw=10,bw_host=50):
+    
+    def __init__(self, k = 4,hosts_per_edge=2,parm1={ 'bw': 10 }, parm2={ 'bw': 50 }):
         ''' Create FatTree topology 
             
             k : Number of pods (can support upto k^3/4 hosts)
@@ -127,7 +129,6 @@ class FatTreeTopo(Topo):
         # added 3 to emulate more hosts (for k=4, 5 hosts per edge switch)
         #hosts = range(2, hosts_per_edge+2)
         
-        
 
         for p in pods:
             for e in edge_sw:
@@ -139,14 +140,14 @@ class FatTreeTopo(Topo):
                     host = self.node_gen(p, e, h)
                     host_opts = self.def_opts(host.name_str())
                     self.addHost(host.name_str(), **host_opts)
-                    self.addLink(edge.name_str(),host.name_str(),bw=bw_host)
-                    
-
+                    self.addLink(edge.name_str(),host.name_str(),intf=TCIntf,params1=parm1, params2=parm2)
+                    # self.addLink(edge.name_str(),host.name_str(),bw=bw_host)
                 for a in agg_sw:
                     agg = self.node_gen(p, a, 1)
                     agg_opts = self.def_opts(agg.name_str())
                     self.addSwitch(agg.name_str(), **agg_opts)
-                    self.addLink(agg.name_str(),edge.name_str(),bw=bw_sw)
+                    self.addLink(agg.name_str(),edge.name_str(),intf=TCIntf,params1=parm1, params2=parm1)
+                    # self.addLink(agg.name_str(),edge.name_str(),bw=bw_sw)
             
             for a in agg_sw:
                 agg = FatTreeNode(p, a, 1)
@@ -155,7 +156,8 @@ class FatTreeTopo(Topo):
                     core = self.node_gen(k, a-k/2+1, c)
                     core_opts = self.def_opts(core.name_str())
                     self.addSwitch(core.name_str(), **core_opts)
-                    self.addLink(agg.name_str(),core.name_str(),bw=bw_sw)
+                    self.addLink(agg.name_str(),core.name_str(),intf=TCIntf,params1=parm1, params2=parm1)
+                    # self.addLink(agg.name_str(),core.name_str(),bw=bw_sw)
 
     def layer(self, name):
         ''' Return layer of node '''

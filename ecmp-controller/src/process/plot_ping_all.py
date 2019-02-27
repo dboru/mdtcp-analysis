@@ -50,9 +50,12 @@ def parse_ping(proto,sf):
      if 'ping' in f:
         for line in open(path+f).xreadlines():
            aline=line.split()
+
            if len(aline)==8 and 'icmp_seq' in line:
-              pdelay=float(aline[6].split('=')[1])
-              ping_delay.append(pdelay)
+              icmp=int(aline[4].split('=')[1])
+              if icmp > 5 :
+                pdelay=float(aline[6].split('=')[1])
+                ping_delay.append(pdelay)
 
   return ping_delay
         
@@ -63,34 +66,45 @@ def main():
 
   plt.rc('font', **font)
 
-  colors=['blue','red','green','black','magenta','cyan','yellow','orange','purple']
+  colors=['blue','red','green','black','olive','steelblue','magenta','brown','cyan','darkblue','orange','purple','lime','yellow']
 
   fig=plt.figure()
   axPlot = fig.add_subplot(1, 1, 1)
   i=0
   for proto in ['mptcp','mdtcp']:
-    for sf in [1,4,8]:
+    for sf in [1,2,3,4,8]:
       ping=parse_ping(proto,sf)
       delay_x,cdf_y=emcdf(ping)
       if sf==1 and proto=='mdtcp':
         llabel='DCTCP'
       elif sf==4 and proto=='mdtcp':
-        llabel='MDTCP[SF4]'
+        llabel='MDTCP[4SFs]'
       elif sf==8 and proto=='mdtcp':
-        llabel='MDTCP[SF8]'
+        llabel='MDTCP[8SFs]'
+
+      elif sf==2 and proto=='mdtcp':
+        llabel='MDTCP[2SFs]'
+      elif sf==3 and proto=='mdtcp':
+        llabel='MDTCP[3SFs]'
+
       elif sf==1 and proto=='mptcp':
         llabel='TCP'
       elif sf==4 and proto=='mptcp':
-        llabel='MPTCP[SF4]'
+        llabel='MPTCP[4SFs]'
       elif sf==8 and proto=='mptcp':
-        llabel='MPTCP[SF8]'
+        llabel='MPTCP[8SFs]'
+
+      elif sf==2 and proto=='mptcp':
+        llabel='MPTCP[2SFs]'
+      elif sf==3 and proto=='mptcp':
+        llabel='MPTCP[3SFs]'
 
       axPlot.plot(delay_x,cdf_y,label=llabel,color=colors[i])
       i+=1
   
   axPlot.set_xlabel('Ping delay (ms)')
   axPlot.set_ylabel('CDF')
-  # axPlot.set_xlim(0,600)
+  # axPlot.set_xlim(0,1000)
   axPlot.grid(True)
   plt.legend(loc='lower right',ncol=2)
   

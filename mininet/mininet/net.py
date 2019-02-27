@@ -383,6 +383,7 @@ class Mininet( object ):
             params: additional link params (optional)
             returns: link object"""
         # Accept node objects or names
+       
         node1 = node1 if not isinstance( node1, basestring ) else self[ node1 ]
         node2 = node2 if not isinstance( node2, basestring ) else self[ node2 ]
         options = dict( params )
@@ -394,8 +395,8 @@ class Mininet( object ):
         if self.intf is not None:
             options.setdefault( 'intf', self.intf )
         # Set default MAC - this should probably be in Link
-        options.setdefault( 'addr1', self.randMac() )
-        options.setdefault( 'addr2', self.randMac() )
+        # options.setdefault( 'addr1', self.randMac() )
+        # options.setdefault( 'addr2', self.randMac() )
         cls = self.link if cls is None else cls
         link = cls( node1, node2, **options )
         self.links.append( link )

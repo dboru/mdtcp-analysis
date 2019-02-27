@@ -9,6 +9,7 @@ parser.add_argument('-f', dest="files", nargs='+', required=True)
 parser.add_argument('-o', '--out', dest="out", default=None)
 parser.add_argument('-k', dest="k", default=None)
 parser.add_argument('-w', dest="workload", default=None)
+parser.add_argument('-host', dest="host",type=int, default=2)
 parser.add_argument('-bw', dest="bw",type=int, default=10)
 parser.add_argument('-t', dest="time", type=int, default=None)
 
@@ -79,7 +80,7 @@ for f in args.files:
     if f.find('client') >= 0:
       throughput[flow].append(float(val))
     else:
-      max_throughput = float(val)
+      max_throughput = 2.0*float(val)/args.host
   else:
     #print "         ERROR!!!!!!!!!!!!!!!!!!!"  
     pass
@@ -89,6 +90,7 @@ for f in args.files:
 avgThroughput = []
 tcp_points = []
 mptcp_points = []
+real_throughput=[]
 
 
 xaxis=[]
@@ -106,15 +108,19 @@ axPlot.grid(True)
 
 colors = ['#ff0000','#ff7f00','#ffff00','#00ff00','#00ffff', '#0000ff', '#4B0082','#8F00FF']
 
+colors=['blue','red','green','black','magenta','cyan','yellow','orange','purple']
+
 fmdtcp =open('mdtcp_goodput','w')
 
-max_throughput=float((4.0*1e6))
+# max_throughput=float(10.0*1e6)
 print(max_throughput)
 
 for i in sorted(throughput.keys()):
   #print i 
-  vals = [ 100.0 * x / max_throughput  for x in throughput[i] ] 
+  vals = [ x / max_throughput  for x in throughput[i] ]
+    
   avgThroughput.append(np.mean(vals))
+  real_throughput.append(np.mean(throughput[i]))
   avg,avg_lci,avg_hci = mean_95conf(throughput[i])
   fmdtcp.write(str(i)+','+str(np.mean(vals))+'\n')
 
@@ -133,10 +139,9 @@ fmdtcp.close()
 #print avgThroughput
 #print max_throughput
 
-
 axPlot.legend(loc='lower right')
 axPlot.set_xlabel("Rank of Flow")
-axPlot.set_ylabel("Throughput (% of optimal)")
+axPlot.set_ylabel("Normalized throughput")
 # axPlot.set_ylim(0, 105)
 axPlot.grid(True)
 # axPlot.set_title( title )
@@ -147,19 +152,19 @@ plt.savefig(rank)
  
 m.rc('figure', figsize=(8, 6))
 fig = plt.figure()
-N = 8
-# # labels = ('1', '2', '3', '4')
-labels = ('1', '2', '3', '4', '5', '6', '7', '8')
+N = 5
+labels = ('1', '2', '3', '4','8')
+#labels = ('1', '2', '3', '4', '5', '6', '7', '8')
 xaxis = np.arange(N)  # the x locations for the groups
 width = 0.5 
 xoffset = (1 - width) / 2
 
 axHist = fig.add_subplot(1, 1, 1)
 axHist.grid(True)
-axHist.bar(xaxis + xoffset+0.25, avgThroughput, width, color='k') #, yerr=menStd)
+axHist.bar(xaxis + xoffset+0.25, real_throughput, width, color='k') #, yerr=menStd)
 
 axHist.set_xlabel("Number of subflows")
-axHist.set_ylabel("Throughput (% of optimal)")
+axHist.set_ylabel("Average throughput (Mb/s)")
 # # axHist.set_title( title )
 axHist.set_xticks(xaxis + width/2 + xoffset)
 axHist.set_xticklabels( labels )

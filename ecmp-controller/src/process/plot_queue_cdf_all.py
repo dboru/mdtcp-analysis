@@ -73,7 +73,7 @@ def main():
   axPlot = fig.add_subplot(1, 1, 1)
   i=0
   for proto in ['mptcp','mdtcp']:
-    for sf in [1,4,8]:
+    for sf in [1,2,3,4]:
       queue=parse_queue(proto,sf)
       queue_x,cdf_y=emcdf(queue)
       if sf==1 and proto=='mdtcp':
@@ -82,12 +82,23 @@ def main():
         llabel='MDTCP[4SFs]'
       elif sf==8 and proto=='mdtcp':
         llabel='MDTCP[8SFs]'
+
+      elif sf==2 and proto=='mdtcp':
+        llabel='MDTCP[2SFs]'
+      elif sf==3 and proto=='mdtcp':
+        llabel='MDTCP[3SFs]'
+
       elif sf==1 and proto=='mptcp':
         llabel='TCP'
       elif sf==4 and proto=='mptcp':
         llabel='MPTCP[4SFs]'
       elif sf==8 and proto=='mptcp':
         llabel='MPTCP[8SFs]'
+
+      elif sf==2 and proto=='mptcp':
+        llabel='MPTCP[2SFs]'
+      elif sf==3 and proto=='mptcp':
+        llabel='MPTCP[3SFs]'
 
       axPlot.plot(queue_x,cdf_y,label=llabel,color=colors[i])
       i+=1
