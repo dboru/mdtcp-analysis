@@ -332,7 +332,6 @@ class TestHost(Host):
             self.client.stop()
         if self.bulk_client is not None:
             self.bulk_client.stop()
-
         if self.iperf_server is not None:
             self.iperf_server.terminate()
 
@@ -847,7 +846,7 @@ def FatTreeNet(args, bw=10, cpu=-1, queue=425, controller='DCController'):
         'enable_red': False,'red_min': args.redmin, 'red_max': args.redmax, 'red_burst': args.burst, \
         'red_prob': args.prob, 'red_avpkt': 1000, 'red_limit': 200000}
     else:
-        red = {'delay':str(args.delay)+'ms','max_queue_size': args.queue,'enable_red':True,'enable_ecn': False, \
+        red_ecn = {'bw':args.bw,'delay':str(args.delay)+'ms','max_queue_size': args.queue,'enable_red':True,'enable_ecn': False, \
         'red_burst':args.burst,'red_prob':args.prob,'red_avpkt':1000,\
          'red_min':args.redmin, 'red_max':args.redmax,'red_limit':200000}
 
