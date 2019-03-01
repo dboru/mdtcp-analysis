@@ -104,6 +104,13 @@ parser.add_argument('--tcpdump',
                     help="Run tcpdump on host interfaces",
                     default=False)
 
+parser.add_argument('--tcp_reddctcp',
+                    dest="tcp_reddctcp",
+                    action="store_true",
+                    help="test tcp with red config as DCTCP",
+                    default=False)
+
+
 parser.add_argument('--delay',
 	dest="delay",
 	default="0.075ms  0.05ms distribution normal  ")
@@ -123,7 +130,7 @@ if args.use_bridge:
 else:
     from mininet.node import OVSKernelSwitch as Switch
 
-lg.setLogLevel('info')
+lg.setLogLevel('debug')
 
 class StarTopo(Topo):
 
@@ -132,37 +139,55 @@ class StarTopo(Topo):
         super(StarTopo, self ).__init__()
 
         # Host and link configuration
-        hconfig = {'cpu': -1}
+        hconfig = {'cpu': 0.5}
         ldelay_config = {'bw': bw, 'delay': args.delay,
-			'max_queue_size': 1000000
+			'max_queue_size': int(args.maxq)
 			} 
 
-        if args.dctcp or args.ecn or args.mdtcp :
+        if args.dctcp  or args.mdtcp or args.tcp_reddctcp :
             lconfig = {'bw': bw,
                'delay':args.delay,
     		   'max_queue_size': int(args.maxq),
     		   'enable_ecn': True,
-               'red_burst': 33,
-               'red_limit':1000000,
+               'red_burst': 30,
+               'red_limit':200000,
                'red_min':30000,
-               'red_max':35000,
+               'red_max':31000,
+               'red_avpkt':1000,
+               'red_prob':1.0,
     		   'use_hfsc': args.use_hfsc,
     		   'speedup': float(args.speedup_bw)
                }
-            print "ECN"
+        elif args.ecn  :
+            lconfig = {'bw':bw,
+               'delay':args.delay,
+    	       'max_queue_size': int(args.maxq),
+    	       'enable_ecn': True,
+               'red_burst': 50,
+               'red_limit':200000,
+               'red_min':30000,
+               'red_max':120000,
+               'red_prob':0.01,
+                'red_avpkt':1000,
+    		   'use_hfsc': args.use_hfsc,
+    		   'speedup': float(args.speedup_bw)
+               }
+           
         else:
             lconfig = {'bw': bw, 
+               'delay':args.delay,
                'max_queue_size': int(args.maxq),
                'enable_red': True,
-               'red_burst': 55,
-               'red_limit':1000000,
+               'red_burst': 50,
+               'red_limit':200000,
                'red_min':30000,
-               'red_max':90000,
+               'red_max':120000,
                'red_prob':0.01,
+               'red_avpkt':1000,
                'use_hfsc': args.use_hfsc,
                'speedup': float(args.speedup_bw)
                }
-            "RED"
+            
 
 
         print '~~~~~~~~~~~~~~~~~> BW = %s' % bw
@@ -173,9 +198,8 @@ class StarTopo(Topo):
 
         self.addSwitch('s1',)
 
-
+        # add link b/n receiver and switch (swith interface will be s1-eth1)
         self.addLink('h1', 's1', **lconfig)
-
 
         for i in xrange(1, n):
             self.addLink('h%d' % (i+1), 's1', **ldelay_config)
@@ -202,8 +226,8 @@ def progress(t):
 
 def enable_tcp_ecn():
     Popen("sysctl -w net.ipv4.tcp_ecn=1", shell=True).wait()
-    # Popen("sudo sysctl -w net.mptcp.mptcp_enabled=0",shell=True).wait()
-    # Popen("sysctl -w net.ipv4.tcp_congestion_control=reno", shell=True).wait()
+    Popen("sudo sysctl -w net.mptcp.mptcp_enabled=0",shell=True).wait()
+    Popen("sysctl -w net.ipv4.tcp_congestion_control=reno", shell=True).wait()
 
 def disable_tcp_ecn():
     os.system("sysctl -w net.ipv4.tcp_ecn=0")
@@ -212,7 +236,7 @@ def disable_tcp_ecn():
 
 
 def enableMPTCP(subflows):
-    # Popen("sysctl -w net.ipv4.tcp_ecn=0",shell=True).wait()
+    Popen("sysctl -w net.ipv4.tcp_ecn=0",shell=True).wait()
     Popen("sysctl -w net.mptcp.mptcp_enabled=1",shell=True).wait()
     Popen("sysctl -w net.mptcp.mptcp_debug=1",shell=True).wait()
     
@@ -248,56 +272,85 @@ def disable_dctcp():
 
 def main():
     seconds = int(args.t)
-    setLogLevel('info')
+    setLogLevel('debug')
     # Reset to known state
     # disable_dctcp()
-    # disable_tcp_ecn()
+    disable_tcp_ecn()
     sleep(2)
 
     # enable_dctcp()
     cong_ctrl="reno"
-    # if args.ecn:
-    #     enable_tcp_ecn()
-    #     cong_ctrl="reno"
-    if args.dctcp:
+    if args.ecn:
+        enable_tcp_ecn()
+        cong_ctrl="reno"
+    elif args.dctcp:
         # enable_tcp_ecn()
         enable_dctcp()
         cong_ctrl="dctcp"
-    # elif args.mptcp:
-    #     enableMPTCP(1)
-    #     cong_ctrl="olia"
-    # elif args.mdtcp:
-    #     enableMDTCP(1)
-    #     cong_ctrl="mdtcp"
-    # else:
-    #     os.system("sysctl -w net.ipv4.tcp_congestion_control=reno")
 
+    elif args.tcp_reddctcp:
+        enable_tcp_ecn()
+        cong_ctrl="reno"
+
+    elif args.mptcp:
+        enableMPTCP(4)
+        cong_ctrl="olia"
+    elif args.mdtcp:
+        enableMDTCP(4)
+        cong_ctrl="mdtcp"
+    else:
+         os.system("sysctl -w net.ipv4.tcp_congestion_control=reno")
 
 
     topo = StarTopo(n=args.n, bw=args.bw)
     net = Mininet(topo=topo, host=CPULimitedHost, link=TCLink, switch=Switch,
 	    autoStaticArp=True)
     net.start()
+   
 
-    # s1= net.getNodeByName('s1')
-    # for port in s1.ports:
-    #     if str.format('{}', port) == 's1-eth1':
+    nodes = net.hosts + net.switches
+    for node in nodes:
+        node.cmd("sysctl -w net.ipv6.conf.all.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.default.disable_ipv6=1")
+        node.cmd("sysctl -w net.ipv6.conf.lo.disable_ipv6=1")
+        for port in node.ports:
+            if str.format('{}', port) != 'lo':
+                #node.cmd(str.format('ethtool --offload {} tx off rx off gro off tso off', port))
+                node.cmd(str.format('ethtool -K {} gso off tso off gro off tx off rx off', port))
+                # if 'eth0' in str(port):
+                #     print(port)
+                #     node_route = node.cmd("ip route show")
+                #     node_route= node_route.rstrip()
+                #     node.cmd('ip route replace %s %s %d %s %d %s %s' % (node_route, 'initcwnd', 4,'initrwnd',4,'rto_min','10ms'))
+                #     node.cmdPrint('ip route show')
                 
-    #             s1.cmd(str.format('tc qdisc replace dev {} root handle 1: netem rate {}mbit', port,args.bw))
-                
-    #             if args.mdtcp or args.dctcp:
-    #                 s1.cmd(str.format('tc qdisc replace dev {} parent 1:1 handle 10: red limit 200000 min 30000 max 35000 avpkt 1000 burst 31 \
-    #                       ecn bandwidth {} probability 0.999 ', port,args.bw))
-    #                 print('Sh**t')                      
-    #             else:
-    #                 s1.cmd(str.format('tc qdisc replace dev {} parent 1:1 handle 10: red limit 200000 min 33000 max 100000 avpkt 1000 burst 55 ecn \
-    #                      bandwidth {} probability 0.01',port,args.bw))
+
+    s1= net.getNodeByName('s1')
+    for port in s1.ports:
+        if str.format('{}', port) == 's1-eth1':
+            
+
+            node.cmd(str.format('tc qdisc del dev {} root',port))
+            node.cmd(str.format('sudo ip link set txqueuelen {} dev {}',args.maxq,port))
+            node.cmd(str.format('tc qdisc replace dev {} root handle 5:0 htb default 1', port))
+            node.cmd(str.format('tc class replace dev {} parent 5:0 classid 5:1 htb rate {}Mbit', port,args.bw))
+            
+            if args.mdtcp or args.dctcp or args.tcp_reddctcp:
+                s1.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min 30000 max 31000 avpkt 1000 burst 30 \
+                    ecn bandwidth {} probability 1.0 ', port,args.bw))
+                                     
+            else:
+                s1.cmd(str.format('tc qdisc replace dev {} parent 5:1 handle 10: red limit 200000 min 30000 max 120000 avpkt 1000 burst 50 \
+                         bandwidth {} probability 0.01',port,args.bw))
+
+            node.cmd(str.format('tc qdisc replace dev {} parent 10:1 handle 20: netem delay {} limit {}', port,args.delay,args.maxq))
                
-
+               
+    # CLI(net)
 
     h1 = net.getNodeByName('h1')
     # print h1.cmd('ping -c 2 10.0.0.2')
-    h1.cmd('iperf -s -Z %s &'% cong_ctrl)
+    h1.cmd('iperf -s -Z %s  >> /dev/null &'% (cong_ctrl))
     sleep(2)
 
 
@@ -318,41 +371,61 @@ def main():
     # monitor = multiprocessing.Process(target=monitor_devs_ng, args=('%s/txrate.txt' % args.dir, 0.01))
     # monitor.start()
     # monitors.append(monitor)
+
     # Popen("rmmod tcp_probe; modprobe tcp_probe; cat /proc/net/tcpprobe > %s/tcp_probe.txt" % args.dir, shell=True)
-    # #CLI(net)
+    
+
+
+    # if args.tcpdump:
+    #     for i in xrange(args.n):
+    #         node_name = 'h%d' % (i+1)
+    #         net.getNodeByName(node_name).popen('tcpdump -ni %s-eth0 -s0 -w \
+    #             %s/%s_tcpdump.pcap' % (node_name, args.dir, node_name), 
+    #             shell=True)
 
 
 
     for i in xrange(1, args.n):
         node_name = 'h%d' % (i+1)
         h = net.getNodeByName(node_name)
+
+        ping='ping 10.0.0.1 -i 1 >> %s/ping.txt &' % (args.dir)
+        h.cmd(ping)
+        sleep(1.0)
+
         if args.udp:
             cmd = 'iperf -c 10.0.0.1 -t %d -i 1 -u -b %sM > %s/iperf_%s.txt &' % (seconds, args.bw, args.dir, node_name)
         else:
             waitListening(h, h1, 5001)
             cmd = 'iperf -c 10.0.0.1 -t %d -i 1 -Z %s > %s/iperf_%s.txt &' % (seconds,cong_ctrl, args.dir, node_name)
         h.cmd(cmd)
-       
-        h.cmd('while true ; do  ss -i -t -4  ; sleep 1; done >> ss_output &')
 
-    net.getNodeByName('h2').popen('/bin/ping 10.0.0.1 > %s/ping.txt &' % args.dir,
-	    shell=True)
-    if args.tcpdump:
-    	for i in xrange(args.n):
-    	    node_name = 'h%d' % (i+1)
-    	    net.getNodeByName(node_name).popen('tcpdump -ni %s-eth0 -s0 -w \
-    		    %s/%s_tcpdump.pcap' % (node_name, args.dir, node_name), 
-    		    shell=True)
+
+        
+
+        
+       
+        # h.cmd('while true ; do  ss -i -t -4  ; sleep 1; done >> ss_output &')
+
+       # net.getNodeByName('h2').popen('/bin/ping 10.0.0.1 > %s/ping.txt &' % args.dir,
+	   #  shell=True)
+
+    
+
+
     progress(seconds)
     for monitor in monitors:
         monitor.terminate()
-
-    net.getNodeByName('h1').pexec("/bin/netstat -s > %s/netstat.txt" %
-	    args.dir, shell=True)
-    net.getNodeByName('h1').pexec("/sbin/ifconfig > %s/ifconfig.txt" %
-	    args.dir, shell=True)
-    net.getNodeByName('h1').pexec("/sbin/tc -s qdisc > %s/tc-stats.txt" %
-    	    args.dir, shell=True)
+    
+    # for h in net.hosts:
+    #     h.cmd("netstat -s > %s/nstat_%s.txt" % (args.dir,h.IP()), shell=True)
+    
+    # net.getNodeByName('h1').pexec("/bin/nstat -a > %s/netstat.txt" %
+	   #  args.dir, shell=True)
+    # net.getNodeByName('h1').pexec("/sbin/ifconfig > %s/ifconfig.txt" %
+	   #  args.dir, shell=True)
+    # net.getNodeByName('h1').pexec("/sbin/tc -s -d  qdisc > %s/tc-stats.txt" %
+    # 	    args.dir, shell=True)
     net.stop()
     # disable_dctcp()
     disable_tcp_ecn()

@@ -45,6 +45,9 @@ def parse_ping(proto,sf):
   # goodput-mdtcp-20190204-bw10delay0.1ft4runtime60
 
   ping_delay=[]
+  times=[]
+ 
+
   path =  'results/goodput-'+proto+'-'+args.path+str(sf)+'/'
   for f in os.listdir(path):
      if 'ping' in f:
@@ -52,14 +55,12 @@ def parse_ping(proto,sf):
            aline=line.split()
 
            if len(aline)==8 and 'icmp_seq' in line:
-              icmp=int(aline[4].split('=')[1])
-              if icmp > 10 :
-                pdelay=float(aline[6].split('=')[1])
-                ping_delay.append(pdelay)
-              # if pdelay > 40:
-              #   print (path+f)
+              icmp_time=int(aline[4].split('=')[1])
+              times.append(icmp_time)
+              ping_delay.append(float(aline[6].split('=')[1]))
+             
 
-  return ping_delay
+  return ping_delay,times
         
 
 def main():
@@ -75,8 +76,10 @@ def main():
   i=0
   for proto in ['mptcp','mdtcp']:
     for sf in [1,2,3,4,8]:
-      ping=parse_ping(proto,sf)
-      delay_x,cdf_y=emcdf(ping)
+      ping,times=parse_ping(proto,sf)
+      
+
+      # delay_x,cdf_y=emcdf(ping)
       if sf==1 and proto=='mdtcp':
         llabel='DCTCP'
       elif sf==4 and proto=='mdtcp':
@@ -100,19 +103,20 @@ def main():
         llabel='MPTCP[2SFs]'
       elif sf==3 and proto=='mptcp':
         llabel='MPTCP[3SFs]'
-
-      axPlot.plot(delay_x,cdf_y,label=llabel,color=colors[i])
+      
+      axPlot.scatter(times,ping,label=llabel,color=colors[i],marker='.')
+      # axPlot.plot(delay_x,cdf_y,label=llabel,color=colors[i])
       i+=1
   
-  axPlot.set_xlabel('Ping delay (ms)')
-  axPlot.set_ylabel('CDF')
+  axPlot.set_xlabel('Time (sec)')
+  axPlot.set_ylabel('Ping delay (ms)')
   # axPlot.set_xlim(0,1000)
   axPlot.grid(True)
-  plt.legend(loc='lower right',ncol=2)
+  plt.legend(loc='upper right',ncol=2)
   
   #plt.show()
 
-  plt.savefig(args.out+'ping-delay.pdf')
+  plt.savefig(args.out+'ping-scatter.pdf')
 
 if __name__ == '__main__':
   main()
